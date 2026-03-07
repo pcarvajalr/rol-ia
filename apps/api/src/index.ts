@@ -1,0 +1,47 @@
+import { serve } from "@hono/node-server"
+import { Hono } from "hono"
+import { cors } from "hono/cors"
+import { logger } from "hono/logger"
+import { authMiddleware } from "./middleware/auth"
+import { authRoutes } from "./routes/auth"
+import { tenantMiddleware, type TenantUser } from "./middleware/tenant"
+import type { AuthUser } from "./middleware/auth"
+
+const app = new Hono()
+
+app.use("*", logger())
+app.use("*", cors({
+  origin: ["http://localhost:5173"],
+  credentials: true,
+}))
+
+// Public routes
+app.get("/health", (c) => c.json({ status: "healthy", timestamp: new Date().toISOString() }))
+
+// Protected routes
+const api = new Hono<{
+  Variables: {
+    authUser: AuthUser
+    user: TenantUser
+    tenantId: string
+  }
+}>()
+api.use("*", authMiddleware)
+api.use("*", tenantMiddleware)
+
+api.get("/me", (c) => {
+  const user = c.get("user")
+  return c.json({ user })
+})
+
+// Public routes (need Firebase token but not tenant context)
+app.route("/auth", authRoutes)
+
+app.route("/api", api)
+
+const port = Number(process.env.PORT) || 3001
+console.log(`API running on http://localhost:${port}`)
+
+serve({ fetch: app.fetch, port })
+
+export default app

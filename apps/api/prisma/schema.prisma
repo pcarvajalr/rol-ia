@@ -1,0 +1,254 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
+}
+
+// === INFRAESTRUCTURA MULTI-TENANT ===
+
+model Tenant {
+  id               String   @id @default(uuid()) @db.Uuid
+  name             String
+  slug             String   @unique
+  plan             String   @default("free")
+  settings         Json     @default("{}")
+  apiKeysEncrypted Json?    @map("api_keys_encrypted")
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  users              User[]
+  configGuardianes   ConfigGuardian[]
+  leadsTracking      LeadTracking[]
+  leadsEventHistory  LeadEventHistory[]
+  citasAgendadas     CitaAgendada[]
+  metricsAdPerf      MetricsAdPerformance[]
+  adPerfDetail       AdPerformanceDetail[]
+  budgetRecs         BudgetRecommendation[]
+  fugaDiagnostico    IaFugaDiagnostico[]
+  contentHooks       IaContentHook[]
+  roasHistory        MetricsRoasHistory[]
+  ventasProyecciones VentasProyeccion[]
+
+  @@map("tenants")
+}
+
+model User {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  firebaseUid String   @unique @map("firebase_uid")
+  email       String
+  role        String   @default("viewer")
+  permissions Json     @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@map("users")
+}
+
+// === GUARDIANES ===
+
+model ConfigGuardian {
+  guardianId        String   @id @map("guardian_id")
+  tenantId          String   @map("tenant_id") @db.Uuid
+  nombre            String
+  estaActivo        Boolean  @default(false) @map("esta_activo")
+  ultimaActivacion  DateTime? @map("ultima_activacion")
+  usuarioCambio     String?  @map("usuario_cambio")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@map("config_guardianes")
+}
+
+model CatTipoEvento {
+  id     Int    @id @default(autoincrement())
+  nombre String
+
+  eventos LeadEventHistory[]
+
+  @@map("cat_tipos_evento")
+}
+
+model CatEstadoGestion {
+  id     Int    @id @default(autoincrement())
+  nombre String
+  color  String?
+
+  leads LeadTracking[]
+
+  @@map("cat_estados_gestion")
+}
+
+// === LEADS ===
+
+model LeadTracking {
+  leadId        String   @id @map("lead_id")
+  tenantId      String   @map("tenant_id") @db.Uuid
+  nombreLead    String   @map("nombre_lead")
+  fuente        String
+  fechaCreacion DateTime @default(now()) @map("fecha_creacion")
+  idEstado      Int?     @map("id_estado")
+
+  tenant  Tenant            @relation(fields: [tenantId], references: [id])
+  estado  CatEstadoGestion? @relation(fields: [idEstado], references: [id])
+  eventos LeadEventHistory[]
+  citas   CitaAgendada[]
+
+  @@index([tenantId])
+  @@index([tenantId, fechaCreacion])
+  @@map("leads_tracking")
+}
+
+model LeadEventHistory {
+  eventId            String   @id @default(uuid()) @map("event_id")
+  tenantId           String   @map("tenant_id") @db.Uuid
+  leadId             String   @map("lead_id")
+  idTipoEvento       Int?     @map("id_tipo_evento")
+  actorIntervencion  String   @map("actor_intervencion")
+  descripcion        String?
+  timestamp          DateTime @default(now())
+
+  tenant     Tenant         @relation(fields: [tenantId], references: [id])
+  lead       LeadTracking   @relation(fields: [leadId], references: [leadId])
+  tipoEvento CatTipoEvento? @relation(fields: [idTipoEvento], references: [id])
+
+  @@index([tenantId])
+  @@index([leadId])
+  @@map("leads_event_history")
+}
+
+model CitaAgendada {
+  idCita           String   @id @default(uuid()) @map("id_cita")
+  tenantId         String   @map("tenant_id") @db.Uuid
+  leadId           String   @map("lead_id")
+  horaAgenda       DateTime @map("hora_agenda")
+  canal            String
+  idGoogleCalendar String?  @map("id_google_calendar")
+
+  tenant Tenant       @relation(fields: [tenantId], references: [id])
+  lead   LeadTracking @relation(fields: [leadId], references: [leadId])
+
+  @@index([tenantId])
+  @@map("citas_agendadas")
+}
+
+// === METRICAS TIME-SERIES ===
+
+model MetricsAdPerformance {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  timestamp      DateTime
+  fuenteId       String   @map("fuente_id")
+  gastoIntervalo Float    @map("gasto_intervalo")
+  convIntervalo  Int      @default(0) @map("conv_intervalo")
+  adAccountId    String?  @map("ad_account_id")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, timestamp])
+  @@map("metrics_ad_performance")
+}
+
+model AdPerformanceDetail {
+  adId              String @id @map("ad_id")
+  tenantId          String @map("tenant_id") @db.Uuid
+  nombreCreativo    String @map("nombre_creativo")
+  cplActual         Float  @map("cpl_actual")
+  trend             String
+  presupuestoActual Float  @map("presupuesto_actual")
+  estadoIa          String @map("estado_ia")
+
+  tenant      Tenant                 @relation(fields: [tenantId], references: [id])
+  budgetRecs  BudgetRecommendation[]
+
+  @@index([tenantId])
+  @@map("ad_performance_detail")
+}
+
+model BudgetRecommendation {
+  id                  String   @id @default(uuid()) @db.Uuid
+  tenantId            String   @map("tenant_id") @db.Uuid
+  adId                String   @map("ad_id")
+  presupuestoSugerido Float    @map("presupuesto_sugerido")
+  ahorroDetectado     Float    @map("ahorro_detectado")
+  fechaCalculo        DateTime @default(now()) @map("fecha_calculo")
+
+  tenant Tenant              @relation(fields: [tenantId], references: [id])
+  ad     AdPerformanceDetail @relation(fields: [adId], references: [adId])
+
+  @@index([tenantId])
+  @@map("budget_recommendations")
+}
+
+// === DIAGNOSTICOS ===
+
+model IaFugaDiagnostico {
+  id                   String @id @default(uuid()) @db.Uuid
+  tenantId             String @map("tenant_id") @db.Uuid
+  categoriaFuga        String @map("categoria_fuga")
+  frecuenciaPorcentaje Float  @map("frecuencia_porcentaje")
+  impactoNegocio       Float  @map("impacto_negocio")
+  volumenLeads         Int    @map("volumen_leads")
+  colorHex             String @map("color_hex")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@map("ia_fuga_diagnostico")
+}
+
+model IaContentHook {
+  hookId             String   @id @default(uuid()) @map("hook_id")
+  tenantId           String   @map("tenant_id") @db.Uuid
+  contenido          String
+  categoria          String
+  scoreProbabilidad  Int      @map("score_probabilidad")
+  briefVisual        Json?    @map("brief_visual")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@map("ia_content_hooks")
+}
+
+model MetricsRoasHistory {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  fecha       DateTime @db.Date
+  fuente      String
+  roasDiario  Float    @map("roas_diario")
+  umbralCorte Float    @map("umbral_corte")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, fecha])
+  @@map("metrics_roas_history")
+}
+
+// === PREDICTIVOS ===
+
+model VentasProyeccion {
+  pkId               String   @id @map("pk_id")
+  tenantId           String   @map("tenant_id") @db.Uuid
+  fecha              DateTime @db.Date
+  ventasReales       Int      @default(0) @map("ventas_reales")
+  ventasProyectadas  Float    @default(0) @map("ventas_proyectadas")
+  metaMensual        Int      @default(0) @map("meta_mensual")
+  fuente             String
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, fecha])
+  @@map("ventas_proyecciones")
+}

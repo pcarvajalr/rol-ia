@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.next/
+.env
+.env.local
+.env.*.local
+*.tsbuildinfo
+.turbo/
+apps/api/.env
+apps/web/.env
+.DS_Store
+
+# Compiled JS artifacts
+apps/web/src/**/*.js
