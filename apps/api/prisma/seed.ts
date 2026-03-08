@@ -242,20 +242,17 @@ async function main() {
   console.log("  LeadEventHistory: 12 records");
 
   // ---- CitaAgendada (5 matching scheduling component) ----
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
+  // Use relative timestamps: appointments spread across the next few hours from now
   const citasData = [
-    { lead: "L-001", hora: 10, min: 30, canal: "Telefono" },
-    { lead: "L-002", hora: 11, min: 0, canal: "WhatsApp" },
-    { lead: "L-003", hora: 11, min: 45, canal: "Telefono" },
-    { lead: "L-004", hora: 14, min: 0, canal: "Telefono" },
-    { lead: "L-005", hora: 15, min: 30, canal: "WhatsApp" },
+    { lead: "L-001", offsetMin: 30, canal: "Telefono" },
+    { lead: "L-002", offsetMin: 60, canal: "WhatsApp" },
+    { lead: "L-003", offsetMin: 105, canal: "Telefono" },
+    { lead: "L-004", offsetMin: 180, canal: "Telefono" },
+    { lead: "L-005", offsetMin: 270, canal: "WhatsApp" },
   ];
 
   for (const c of citasData) {
-    const horaAgenda = new Date(today);
-    horaAgenda.setHours(c.hora, c.min, 0, 0);
+    const horaAgenda = new Date(now.getTime() + c.offsetMin * 60 * 1000);
     await prisma.citaAgendada.create({
       data: {
         idCita: randomUUID(),
@@ -269,12 +266,11 @@ async function main() {
   }
   console.log("  CitaAgendada: 5 records");
 
-  // ---- MetricsAdPerformance (30 records, 10min intervals from 08:00) ----
+  // ---- MetricsAdPerformance (30 records, 10min intervals ending ~now) ----
+  // Use relative timestamps so data always falls within the 5h query window
   for (let i = 0; i < 30; i++) {
-    const hour = 8 + Math.floor(i / 6);
-    const min = (i % 6) * 10;
-    const timestamp = new Date(today);
-    timestamp.setHours(hour, min, 0, 0);
+    const minutesAgo = (29 - i) * 10; // 290min ago → 0min ago
+    const timestamp = new Date(now.getTime() - minutesAgo * 60 * 1000);
 
     const fuente = i % 2 === 0 ? "Meta" : "Google";
     const metaSpendBase = 15 + Math.random() * 35;
