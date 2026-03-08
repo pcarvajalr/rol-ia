@@ -1,5 +1,5 @@
 
-import { useState, useMemo } from "react"
+import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Radio, Shield, Eye, TrendingDown } from "lucide-react"
@@ -12,26 +12,31 @@ import {
   ReferenceLine,
   Tooltip,
 } from "recharts"
+import { useIntelFetch } from "@/hooks/use-intel-fetch"
+import { IntelEmptyState } from "./intel-empty-state"
+import { Skeleton } from "@/components/ui/skeleton"
 
-const days = ["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"]
+interface ROASPoint {
+  day: string
+  meta: number
+  google: number
+  threshold: number
+}
 
-function buildROASData() {
-  const meta = [3.2, 2.9, 2.5, 2.1, 1.8, 1.4, 1.1]
-  const google = [2.8, 2.6, 2.3, 2.4, 2.0, 1.7, 1.5]
-  return days.map((d, i) => ({
-    day: d,
-    meta: meta[i],
-    google: google[i],
-    threshold: 1.5,
-  }))
+interface ROASData {
+  points: ROASPoint[]
 }
 
 export function IntelROASTrend() {
+  const { data, loading } = useIntelFetch<ROASData>("/api/intel/roas-trend", { points: [] })
   const [guardianActive, setGuardianActive] = useState(false)
-  const data = useMemo(() => buildROASData(), [])
 
-  const latestMeta = data[data.length - 1].meta
-  const latestGoogle = data[data.length - 1].google
+  if (loading) return <Skeleton className="h-[380px] rounded-xl" />
+  if (data.points.length === 0) return <IntelEmptyState />
+
+  const points = data.points
+  const latestMeta = points[points.length - 1].meta
+  const latestGoogle = points[points.length - 1].google
   const anyBelow = latestMeta < 1.5 || latestGoogle < 1.5
 
   return (
@@ -83,7 +88,7 @@ export function IntelROASTrend() {
 
         <div className="h-48">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data}>
+            <AreaChart data={points}>
               <defs>
                 <linearGradient id="roasMetaGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2} />

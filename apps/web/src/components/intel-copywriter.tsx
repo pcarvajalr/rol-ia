@@ -3,7 +3,10 @@ import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Pencil, Shield, Eye, Sparkles, ArrowRight, ThumbsUp, ThumbsDown, Minus } from "lucide-react"
+import { Pencil, Shield, Eye, Sparkles, ThumbsUp, ThumbsDown, Minus } from "lucide-react"
+import { useIntelFetch } from "@/hooks/use-intel-fetch"
+import { IntelEmptyState } from "./intel-empty-state"
+import { Skeleton } from "@/components/ui/skeleton"
 
 interface HookVariation {
   id: number
@@ -13,41 +16,15 @@ interface HookVariation {
   score: number
 }
 
-const hooks: HookVariation[] = [
-  {
-    id: 1,
-    hook: "Tu competencia ya automatizo sus ventas. Tu equipo sigue copiando y pegando mensajes.",
-    angle: "Dolor / Comparacion",
-    sentiment: "positive",
-    score: 87,
-  },
-  {
-    id: 2,
-    hook: "Cada 7 minutos pierdes un cliente. Rol.IA los rescata en 30 segundos.",
-    angle: "Urgencia / Estadistica",
-    sentiment: "positive",
-    score: 92,
-  },
-  {
-    id: 3,
-    hook: "Deja de pagar publicidad para que tus vendedores la ignoren.",
-    angle: "Frustracion / Inversion",
-    sentiment: "neutral",
-    score: 78,
-  },
-]
-
 interface BriefItem {
   label: string
   value: string
 }
 
-const designBrief: BriefItem[] = [
-  { label: "Tono visual", value: "Urgente, limpio, profesional" },
-  { label: "Paleta sugerida", value: "Oscuro + acento violeta + rojo CTA" },
-  { label: "Formato", value: "Video corto 15s o Carrusel 3 slides" },
-  { label: "CTA principal", value: "Agenda tu demo en 30 segundos" },
-]
+interface CopywriterData {
+  hooks: HookVariation[]
+  designBrief: BriefItem[]
+}
 
 const sentimentIcon = {
   positive: <ThumbsUp className="h-3 w-3" />,
@@ -62,8 +39,15 @@ const sentimentColor = {
 }
 
 export function IntelCopywriter() {
+  const { data, loading } = useIntelFetch<CopywriterData>("/api/intel/copywriter", { hooks: [], designBrief: [] })
   const [guardianActive, setGuardianActive] = useState(false)
   const [selectedHook, setSelectedHook] = useState<number | null>(null)
+
+  if (loading) return <Skeleton className="h-[420px] rounded-xl" />
+  if (data.hooks.length === 0) return <IntelEmptyState />
+
+  const hooks = data.hooks as HookVariation[]
+  const designBrief = data.designBrief as BriefItem[]
 
   return (
     <Card className="border-border/50 bg-card">
@@ -78,7 +62,7 @@ export function IntelCopywriter() {
           <div className="flex items-center gap-3">
             <Badge variant="outline" className="border-rescue/30 text-rescue text-xs">
               <Sparkles className="mr-1 h-3 w-3" />
-              3 hooks generados
+              {hooks.length} hooks generados
             </Badge>
             <button
               onClick={() => setGuardianActive(!guardianActive)}
@@ -130,19 +114,21 @@ export function IntelCopywriter() {
         </div>
 
         {/* Design brief */}
-        <div className="flex flex-col gap-2">
-          <span className="text-muted-foreground text-[11px] font-medium uppercase tracking-wider">
-            Brief de Diseno
-          </span>
-          <div className="bg-secondary/30 border-border/40 grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg border p-3">
-            {designBrief.map((item) => (
-              <div key={item.label} className="flex flex-col gap-0.5">
-                <span className="text-muted-foreground text-[10px] uppercase tracking-wider">{item.label}</span>
-                <span className="text-foreground text-xs">{item.value}</span>
-              </div>
-            ))}
+        {designBrief.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <span className="text-muted-foreground text-[11px] font-medium uppercase tracking-wider">
+              Brief de Diseno
+            </span>
+            <div className="bg-secondary/30 border-border/40 grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg border p-3">
+              {designBrief.map((item) => (
+                <div key={item.label} className="flex flex-col gap-0.5">
+                  <span className="text-muted-foreground text-[10px] uppercase tracking-wider">{item.label}</span>
+                  <span className="text-foreground text-xs">{item.value}</span>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         <AnimatePresence>
           {guardianActive && (

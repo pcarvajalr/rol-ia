@@ -4,7 +4,10 @@ import { cors } from "hono/cors"
 import { logger } from "hono/logger"
 import { authMiddleware } from "./middleware/auth"
 import { authRoutes } from "./routes/auth"
+import { adminRoutes } from "./routes/admin"
+import { intelRoutes } from "./routes/intel"
 import { tenantMiddleware, type TenantUser } from "./middleware/tenant"
+import { superadminMiddleware } from "./middleware/superadmin"
 import type { AuthUser } from "./middleware/auth"
 
 const app = new Hono()
@@ -18,7 +21,7 @@ app.use("*", cors({
 // Public routes
 app.get("/health", (c) => c.json({ status: "healthy", timestamp: new Date().toISOString() }))
 
-// Protected routes
+// Protected routes (auth + tenant)
 const api = new Hono<{
   Variables: {
     authUser: AuthUser
@@ -34,9 +37,25 @@ api.get("/me", (c) => {
   return c.json({ user })
 })
 
-// Public routes (need Firebase token but not tenant context)
+api.route("/intel", intelRoutes)
+
+// Admin routes (auth + tenant + superadmin)
+const adminApi = new Hono<{
+  Variables: {
+    authUser: AuthUser
+    user: TenantUser
+    tenantId: string
+  }
+}>()
+adminApi.use("*", authMiddleware)
+adminApi.use("*", tenantMiddleware)
+adminApi.use("*", superadminMiddleware)
+adminApi.route("/", adminRoutes)
+
+// Auth routes (register uses own token verification, status/verify-email use authMiddleware)
 app.route("/auth", authRoutes)
 
+app.route("/admin", adminApi)
 app.route("/api", api)
 
 const port = Number(process.env.PORT) || 3001

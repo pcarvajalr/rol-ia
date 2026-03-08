@@ -3,6 +3,15 @@ import { useEffect, useState } from "react"
 import { motion } from "framer-motion"
 import { Card, CardContent } from "@/components/ui/card"
 import { Clock, Zap, AlertTriangle } from "lucide-react"
+import { useIntelFetch } from "@/hooks/use-intel-fetch"
+import { IntelEmptyState } from "./intel-empty-state"
+import { Skeleton } from "@/components/ui/skeleton"
+
+interface KPIData {
+  capitalAtRisk: number
+  humanResponseTimeMin: number
+  roliaResponseTimeMin: number
+}
 
 function AnimatedClock({ time, color }: { time: string; color: string }) {
   return (
@@ -31,15 +40,46 @@ function PulsingValue({ value, color }: { value: string; color: string }) {
   )
 }
 
+function formatMinutes(min: number): string {
+  const m = Math.floor(min)
+  const s = Math.round((min - m) * 60)
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+}
+
 export function KPICards() {
-  const [capitalAtRisk, setCapitalAtRisk] = useState(42850)
+  const { data, loading } = useIntelFetch<KPIData>("/api/intel/kpi", {
+    capitalAtRisk: 0,
+    humanResponseTimeMin: 0,
+    roliaResponseTimeMin: 0,
+  })
+
+  const [capitalAtRisk, setCapitalAtRisk] = useState(0)
 
   useEffect(() => {
+    if (data.capitalAtRisk > 0) setCapitalAtRisk(data.capitalAtRisk)
+  }, [data.capitalAtRisk])
+
+  useEffect(() => {
+    if (capitalAtRisk === 0) return
     const interval = setInterval(() => {
       setCapitalAtRisk((prev) => prev + Math.floor(Math.random() * 200 + 50))
     }, 3000)
     return () => clearInterval(interval)
-  }, [])
+  }, [capitalAtRisk > 0])
+
+  if (loading) {
+    return (
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        {[0, 1, 2].map((i) => (
+          <Skeleton key={i} className="h-[130px] rounded-xl" />
+        ))}
+      </div>
+    )
+  }
+
+  if (data.capitalAtRisk === 0 && data.humanResponseTimeMin === 0 && data.roliaResponseTimeMin === 0) {
+    return <IntelEmptyState />
+  }
 
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -59,7 +99,7 @@ export function KPICards() {
                 Resp. Humana Promedio
               </span>
             </div>
-            <AnimatedClock time="45:00" color="var(--alert)" />
+            <AnimatedClock time={formatMinutes(data.humanResponseTimeMin)} color="var(--alert)" />
             <span className="text-alert/70 text-xs">min. de espera</span>
           </CardContent>
         </Card>
@@ -81,7 +121,7 @@ export function KPICards() {
                 Resp. Rol.IA Promedio
               </span>
             </div>
-            <AnimatedClock time="07:02" color="var(--rescue)" />
+            <AnimatedClock time={formatMinutes(data.roliaResponseTimeMin)} color="var(--rescue)" />
             <span className="text-rescue/70 text-xs">min. de respuesta</span>
           </CardContent>
         </Card>

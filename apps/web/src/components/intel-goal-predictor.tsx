@@ -1,5 +1,5 @@
 
-import { useState, useMemo } from "react"
+import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -12,52 +12,32 @@ import {
   Tooltip,
 } from "recharts"
 import { TrendingUp, Shield, Eye, Target } from "lucide-react"
+import { useIntelFetch } from "@/hooks/use-intel-fetch"
+import { IntelEmptyState } from "./intel-empty-state"
+import { Skeleton } from "@/components/ui/skeleton"
 
-const MONTHLY_GOAL = 120
+interface GoalPoint {
+  day: string
+  actual?: number
+  forecast?: number
+}
 
-function buildSalesData() {
-  const actual = [18, 29, 37, 48, 55, 63, 70, 78]
-  const dayLabels = ["Dia 1", "Dia 4", "Dia 7", "Dia 10", "Dia 13", "Dia 16", "Dia 19", "Dia 22"]
-  const data: { day: string; actual?: number; forecast?: number }[] = []
-
-  for (let i = 0; i < actual.length; i++) {
-    data.push({ day: dayLabels[i], actual: actual[i] })
-  }
-
-  // Simple linear regression for forecast
-  const n = actual.length
-  const xMean = (n - 1) / 2
-  const yMean = actual.reduce((a, b) => a + b, 0) / n
-  let num = 0
-  let den = 0
-  for (let i = 0; i < n; i++) {
-    num += (i - xMean) * (actual[i] - yMean)
-    den += (i - xMean) * (i - xMean)
-  }
-  const slope = den !== 0 ? num / den : 0
-  const intercept = yMean - slope * xMean
-
-  const forecastDays = ["Dia 25", "Dia 28", "Dia 30"]
-  const forecastIndices = [8, 9, 10]
-
-  // Bridge point: last actual + first forecast
-  data[data.length - 1].forecast = actual[actual.length - 1]
-
-  for (let j = 0; j < forecastDays.length; j++) {
-    const predicted = Math.round(intercept + slope * forecastIndices[j])
-    data.push({ day: forecastDays[j], forecast: predicted })
-  }
-
-  return data
+interface GoalData {
+  monthlyGoal: number
+  points: GoalPoint[]
 }
 
 export function IntelGoalPredictor() {
+  const { data, loading } = useIntelFetch<GoalData>("/api/intel/goal-predictor", { monthlyGoal: 0, points: [] })
   const [guardianActive, setGuardianActive] = useState(false)
-  const data = useMemo(() => buildSalesData(), [])
 
-  const lastForecast = data[data.length - 1].forecast ?? 0
-  const willReach = lastForecast >= MONTHLY_GOAL
-  const pct = Math.round((lastForecast / MONTHLY_GOAL) * 100)
+  if (loading) return <Skeleton className="h-[400px] rounded-xl" />
+  if (data.points.length === 0) return <IntelEmptyState />
+
+  const { monthlyGoal, points } = data
+  const lastForecast = points[points.length - 1].forecast ?? points[points.length - 1].actual ?? 0
+  const willReach = lastForecast >= monthlyGoal
+  const pct = monthlyGoal > 0 ? Math.round((lastForecast / monthlyGoal) * 100) : 0
 
   return (
     <Card className="border-border/50 bg-card">
@@ -107,15 +87,15 @@ export function IntelGoalPredictor() {
           </div>
           <div className="flex items-center gap-2">
             <span className="bg-alert/50 h-px w-4" />
-            <span className="text-muted-foreground text-[11px]">Meta ({MONTHLY_GOAL})</span>
+            <span className="text-muted-foreground text-[11px]">Meta ({monthlyGoal})</span>
           </div>
         </div>
 
         <div className="h-52">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data}>
+            <LineChart data={points}>
               <XAxis dataKey="day" stroke="#71717a" fontSize={10} tickLine={false} axisLine={false} />
-              <YAxis stroke="#71717a" fontSize={10} tickLine={false} axisLine={false} domain={[0, MONTHLY_GOAL + 20]} />
+              <YAxis stroke="#71717a" fontSize={10} tickLine={false} axisLine={false} domain={[0, monthlyGoal + 20]} />
               <Tooltip
                 contentStyle={{
                   backgroundColor: "#0f0f13",
@@ -126,12 +106,12 @@ export function IntelGoalPredictor() {
                 }}
               />
               <ReferenceLine
-                y={MONTHLY_GOAL}
+                y={monthlyGoal}
                 stroke="#ef4444"
                 strokeDasharray="6 3"
                 strokeOpacity={0.5}
                 label={{
-                  value: `Meta ${MONTHLY_GOAL}`,
+                  value: `Meta ${monthlyGoal}`,
                   position: "right",
                   fill: "#ef4444",
                   fontSize: 10,
@@ -163,7 +143,7 @@ export function IntelGoalPredictor() {
             {willReach ? (
               <>Basado en la tendencia actual, se proyecta <span className="text-rescue font-medium">alcanzar la meta</span> con {lastForecast} ventas estimadas al cierre del mes.</>
             ) : (
-              <>Alerta: la proyeccion indica <span className="text-alert font-medium">{MONTHLY_GOAL - lastForecast} ventas por debajo</span> de la meta. Se recomienda aumentar inversion o activar campanas adicionales.</>
+              <>Alerta: la proyeccion indica <span className="text-alert font-medium">{monthlyGoal - lastForecast} ventas por debajo</span> de la meta. Se recomienda aumentar inversion o activar campanas adicionales.</>
             )}
           </p>
         </div>

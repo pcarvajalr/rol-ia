@@ -1,6 +1,8 @@
 import { Hono } from "hono"
 import { prisma } from "../db/client"
 import admin from "firebase-admin"
+import { authMiddleware } from "../middleware/auth"
+import type { AuthUser } from "../middleware/auth"
 
 const auth = new Hono()
 
@@ -59,6 +61,7 @@ auth.post("/register", async (c) => {
         firebaseUid: decoded.uid,
         email: decoded.email ?? "",
         role: "owner",
+        approved: false,
       },
     })
 
@@ -70,5 +73,44 @@ auth.post("/register", async (c) => {
     user: { id: result.user.id, email: result.user.email, role: result.user.role },
   }, 201)
 })
+
+// Routes that need authMiddleware but not tenant context
+const authProtected = new Hono<{
+  Variables: { authUser: AuthUser }
+}>()
+authProtected.use("*", authMiddleware)
+
+// POST /auth/verify-email - Check Firebase email verification and return status
+authProtected.post("/verify-email", async (c) => {
+  const authUser = c.get("authUser")
+  return c.json({ emailVerified: authUser.emailVerified }, 200)
+})
+
+// GET /auth/status - Returns registration, verification, and approval status
+authProtected.get("/status", async (c) => {
+  const authUser = c.get("authUser")
+
+  const user = await prisma.user.findUnique({
+    where: { firebaseUid: authUser.firebaseUid },
+  })
+
+  if (!user) {
+    return c.json({
+      registered: false,
+      emailVerified: false,
+      approved: false,
+      role: null,
+    }, 200)
+  }
+
+  return c.json({
+    registered: true,
+    emailVerified: user.approved ? true : authUser.emailVerified,
+    approved: user.approved,
+    role: user.role,
+  }, 200)
+})
+
+auth.route("/", authProtected)
 
 export { auth as authRoutes }

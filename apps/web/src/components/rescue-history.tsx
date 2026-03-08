@@ -2,36 +2,26 @@
 import { motion } from "framer-motion"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { XCircle, CheckCircle2, User, Zap } from "lucide-react"
+import { useIntelFetch } from "@/hooks/use-intel-fetch"
+import { IntelEmptyState } from "./intel-empty-state"
+import { Skeleton } from "@/components/ui/skeleton"
 
-const historyItems = [
-  {
-    human: "Sin actividad - 45 min sin respuesta",
-    aura: "WhatsApp de cortesia enviado (Clientify Log)",
-    time: "09:00",
-  },
-  {
-    human: "Lead enfriandose - Sin seguimiento",
-    aura: "Llamada de agendamiento exitosa (Vapi Log)",
-    time: "09:10",
-  },
-  {
-    human: "Perdida de oportunidad - Lead perdido",
-    aura: "Cita agendada en Google Calendar",
-    time: "09:15",
-  },
-  {
-    human: "Sin actividad - Lead nocturno ignorado",
-    aura: "Secuencia automatica a las 08:00 siguiente",
-    time: "23:30",
-  },
-  {
-    human: "Respuesta generica copiada/pegada",
-    aura: "Mensaje personalizado basado en contexto CRM",
-    time: "10:20",
-  },
-]
+interface HistoryItem {
+  time: string
+  human: string
+  aura: string
+}
+
+interface RescueHistoryData {
+  items: HistoryItem[]
+}
 
 export function RescueHistory() {
+  const { data, loading } = useIntelFetch<RescueHistoryData>("/api/intel/rescue-history", { items: [] })
+
+  if (loading) return <Skeleton className="h-[300px] rounded-xl" />
+  if (data.items.length === 0) return <IntelEmptyState />
+
   return (
     <Card className="border-aura/20 bg-card">
       <CardHeader>
@@ -52,7 +42,7 @@ export function RescueHistory() {
               Rol.IA
             </div>
           </div>
-          {historyItems.map((item, i) => (
+          {data.items.map((item, i) => (
             <motion.div
               key={i}
               initial={{ opacity: 0, x: -10 }}

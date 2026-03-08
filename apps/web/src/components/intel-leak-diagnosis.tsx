@@ -14,6 +14,9 @@ import {
   Tooltip,
   Cell,
 } from "recharts"
+import { useIntelFetch } from "@/hooks/use-intel-fetch"
+import { IntelEmptyState } from "./intel-empty-state"
+import { Skeleton } from "@/components/ui/skeleton"
 
 interface LeakReason {
   name: string
@@ -23,16 +26,9 @@ interface LeakReason {
   color: string
 }
 
-const reasons: LeakReason[] = [
-  { name: "Vendedor saturado", frequency: 38, impact: 85, size: 420, color: "#ef4444" },
-  { name: "Horario inhabil", frequency: 27, impact: 60, size: 310, color: "#f59e0b" },
-  { name: "Lead de baja calidad", frequency: 22, impact: 35, size: 250, color: "#6366f1" },
-  { name: "Sin numero valido", frequency: 15, impact: 70, size: 180, color: "#a855f7" },
-  { name: "CRM desactualizado", frequency: 12, impact: 50, size: 150, color: "#f59e0b" },
-  { name: "Canal equivocado", frequency: 9, impact: 40, size: 120, color: "#6366f1" },
-  { name: "Respuesta generica", frequency: 18, impact: 55, size: 200, color: "#ef4444" },
-  { name: "Doble asignacion", frequency: 8, impact: 30, size: 100, color: "#22c55e" },
-]
+interface LeakData {
+  reasons: LeakReason[]
+}
 
 function CustomTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: LeakReason }> }) {
   if (!active || !payload?.length) return null
@@ -47,8 +43,13 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: Array<
 }
 
 export function IntelLeakDiagnosis() {
+  const { data, loading } = useIntelFetch<LeakData>("/api/intel/leak-diagnosis", { reasons: [] })
   const [guardianActive, setGuardianActive] = useState(false)
 
+  if (loading) return <Skeleton className="h-[420px] rounded-xl" />
+  if (data.reasons.length === 0) return <IntelEmptyState />
+
+  const reasons = data.reasons
   const topReason = reasons.reduce((a, b) => (a.frequency > b.frequency ? a : b))
 
   return (
@@ -121,7 +122,7 @@ export function IntelLeakDiagnosis() {
 
         {/* Word-cloud-style tags */}
         <div className="flex flex-wrap gap-2">
-          {reasons
+          {[...reasons]
             .sort((a, b) => b.frequency - a.frequency)
             .map((r) => {
               const scale = 0.7 + (r.frequency / 40) * 0.6

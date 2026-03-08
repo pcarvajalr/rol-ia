@@ -1,5 +1,4 @@
 
-import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -10,9 +9,11 @@ import {
   PhoneCall,
   CalendarCheck,
   CircleDot,
-  Settings2,
   Lock,
 } from "lucide-react"
+import { useIntelFetch } from "@/hooks/use-intel-fetch"
+import { IntelEmptyState } from "./intel-empty-state"
+import { Skeleton } from "@/components/ui/skeleton"
 
 interface LogEntry {
   id: number
@@ -25,97 +26,9 @@ interface ActivityFeedProps {
   slaMinutes: number
 }
 
-function buildStaticLogs(slaMinutes: number): LogEntry[] {
-  const baseHour = 9
-  const baseMin = 0
-  const triggerMin = baseMin + slaMinutes
-  const triggerHourStr = String(baseHour + Math.floor(triggerMin / 60)).padStart(2, "0")
-  const triggerMinStr = String(triggerMin % 60).padStart(2, "0")
-
-  return [
-    {
-      id: 0,
-      time: "08:59:50",
-      message: `[Config] SLA definido en ${slaMinutes} min. Rol.IA intervenira a las ${triggerHourStr}:${triggerMinStr}:00.`,
-      type: "config",
-    },
-    {
-      id: 1,
-      time: "09:00:01",
-      message: 'Webhook recibido: Lead "Juan Perez" ingreso.',
-      type: "webhook",
-    },
-    {
-      id: 2,
-      time: `${triggerHourStr}:${triggerMinStr}:00`,
-      message: "Alerta: Humano no atendio. Iniciando secuencia Rol.IA.",
-      type: "alert",
-    },
-    {
-      id: 3,
-      time: `${triggerHourStr}:${triggerMinStr}:05`,
-      message: "Mensaje enviado via [MOD-MSG-ENCRYPTED].",
-      type: "whatsapp",
-    },
-    {
-      id: 4,
-      time: `${triggerHourStr}:${String(parseInt(triggerMinStr) + 2).padStart(2, "0")}:05`,
-      message: "Sin respuesta. Disparando llamada via [MOD-VOZ-ENCRYPTED].",
-      type: "vapi",
-    },
-    {
-      id: 5,
-      time: `${triggerHourStr}:${String(parseInt(triggerMinStr) + 3).padStart(2, "0")}:30`,
-      message: "EXITO! Cita agendada en Google Calendar.",
-      type: "success",
-    },
-  ]
+interface ActivityFeedData {
+  logs: LogEntry[]
 }
-
-const additionalLogs: LogEntry[] = [
-  {
-    id: 6,
-    time: "09:15:12",
-    message: 'Webhook recibido: Lead "Maria Lopez" ingreso.',
-    type: "webhook",
-  },
-  {
-    id: 7,
-    time: "09:15:15",
-    message: "CRM enriquecido via [MOD-CRM-ENCRYPTED]: empresa Fintech SA.",
-    type: "info",
-  },
-  {
-    id: 8,
-    time: "09:22:15",
-    message: "Alerta: Humano no atendio. Secuencia Rol.IA activada.",
-    type: "alert",
-  },
-  {
-    id: 9,
-    time: "09:22:20",
-    message: "Mensaje personalizado enviado via [MOD-MSG-ENCRYPTED].",
-    type: "whatsapp",
-  },
-  {
-    id: 10,
-    time: "09:23:45",
-    message: "Respuesta recibida. Lead interesado.",
-    type: "success",
-  },
-  {
-    id: 11,
-    time: "09:30:00",
-    message: 'Webhook recibido: Lead "Carlos Ruiz" ingreso.',
-    type: "webhook",
-  },
-  {
-    id: 12,
-    time: "09:37:00",
-    message: "Alerta: Sin respuesta humana. IA interviniendo.",
-    type: "alert",
-  },
-]
 
 const iconMap = {
   webhook: <Webhook className="h-3.5 w-3.5" />,
@@ -124,7 +37,7 @@ const iconMap = {
   vapi: <PhoneCall className="h-3.5 w-3.5" />,
   success: <CalendarCheck className="h-3.5 w-3.5" />,
   info: <CircleDot className="h-3.5 w-3.5" />,
-  config: <Settings2 className="h-3.5 w-3.5" />,
+  config: <CircleDot className="h-3.5 w-3.5" />,
 }
 
 const colorMap = {
@@ -147,25 +60,11 @@ const dotColorMap = {
   config: "bg-aura",
 }
 
-export function ActivityFeed({ slaMinutes }: ActivityFeedProps) {
-  const [logs, setLogs] = useState<LogEntry[]>(() => buildStaticLogs(slaMinutes))
-  const addIndex = useRef(0)
+export function ActivityFeed({ slaMinutes: _slaMinutes }: ActivityFeedProps) {
+  const { data, loading } = useIntelFetch<ActivityFeedData>("/api/intel/activity-feed", { logs: [] })
 
-  // Rebuild static logs when SLA changes
-  useEffect(() => {
-    setLogs(buildStaticLogs(slaMinutes))
-    addIndex.current = 0
-  }, [slaMinutes])
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (addIndex.current < additionalLogs.length) {
-        setLogs((prev) => [...prev, additionalLogs[addIndex.current]])
-        addIndex.current++
-      }
-    }, 5000)
-    return () => clearInterval(interval)
-  }, [])
+  if (loading) return <Skeleton className="h-[520px] rounded-xl" />
+  if (data.logs.length === 0) return <IntelEmptyState />
 
   return (
     <Card className="border-aura/20 bg-card flex h-full flex-col">
@@ -182,7 +81,7 @@ export function ActivityFeed({ slaMinutes }: ActivityFeedProps) {
         <ScrollArea className="h-[480px]">
           <div className="flex flex-col gap-1 pr-3">
             <AnimatePresence initial={false}>
-              {logs.map((log) => (
+              {data.logs.map((log) => (
                 <motion.div
                   key={`${log.id}-${log.time}`}
                   initial={{ opacity: 0, height: 0 }}
@@ -224,7 +123,6 @@ export function ActivityFeed({ slaMinutes }: ActivityFeedProps) {
           </div>
         </ScrollArea>
 
-        {/* Encrypted tools legend */}
         <div className="border-border/30 mt-3 flex items-start gap-2 border-t pt-3">
           <Lock className="text-muted-foreground mt-0.5 h-3 w-3 shrink-0" />
           <p className="text-muted-foreground text-[10px] italic leading-relaxed">

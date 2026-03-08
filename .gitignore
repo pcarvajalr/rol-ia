@@ -12,3 +12,6 @@ apps/web/.env
 
 # Compiled JS artifacts
 apps/web/src/**/*.js
+
+# Firebase
+.firebase/

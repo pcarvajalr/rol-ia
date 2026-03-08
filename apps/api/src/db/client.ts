@@ -7,7 +7,7 @@ export function createTenantClient(tenantId: string) {
     query: {
       $allOperations({ args, query, model }: { args: any; query: (args: any) => any; model?: string }) {
         // Global tables without tenant_id
-        const globalTables = ["CatTipoEvento", "CatEstadoGestion", "Tenant"]
+        const globalTables = ["CatTipoEvento", "CatEstadoGestion", "Tenant", "User"]
         if (model && globalTables.includes(model)) {
           return query(args)
         }

@@ -13,19 +13,31 @@ import {
   Area,
   AreaChart,
 } from "recharts"
+import { useIntelFetch } from "@/hooks/use-intel-fetch"
+import { IntelEmptyState } from "./intel-empty-state"
+import { Skeleton } from "@/components/ui/skeleton"
 
-const roasData = [
-  { day: "Lun", roas: 3.2 },
-  { day: "Mar", roas: 2.8 },
-  { day: "Mie", roas: 2.5 },
-  { day: "Jue", roas: 2.1 },
-  { day: "Vie", roas: 1.7 },
-  { day: "Sab", roas: 1.3 },
-  { day: "Dom", roas: 0.9 },
-]
+interface ROASPoint {
+  day: string
+  roas: number
+}
+
+interface ROASGuardianData {
+  points: ROASPoint[]
+  threshold: number
+  belowThreshold: boolean
+}
 
 export function ROASGuardian() {
+  const { data, loading } = useIntelFetch<ROASGuardianData>("/api/intel/roas-guardian", {
+    points: [],
+    threshold: 1.5,
+    belowThreshold: false,
+  })
   const [guardianActive, setGuardianActive] = useState(true)
+
+  if (loading) return <Skeleton className="h-[350px] rounded-xl" />
+  if (data.points.length === 0) return <IntelEmptyState />
 
   return (
     <Card className="border-aura/20 bg-card">
@@ -55,10 +67,12 @@ export function ROASGuardian() {
                 className="data-[state=checked]:bg-aura"
               />
             </div>
-            <Badge variant="outline" className="border-alert/30 text-alert">
-              <Pause className="mr-1 h-3 w-3" />
-              Campana Pausada
-            </Badge>
+            {data.belowThreshold && (
+              <Badge variant="outline" className="border-alert/30 text-alert">
+                <Pause className="mr-1 h-3 w-3" />
+                Campana Pausada
+              </Badge>
+            )}
           </div>
         </div>
       </CardHeader>
@@ -79,7 +93,7 @@ export function ROASGuardian() {
 
         <div className="h-48">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={roasData}>
+            <AreaChart data={data.points}>
               <defs>
                 <linearGradient id="roasGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
@@ -101,7 +115,7 @@ export function ROASGuardian() {
                 domain={[0, 4]}
               />
               <ReferenceLine
-                y={1.5}
+                y={data.threshold}
                 stroke="#a855f7"
                 strokeDasharray="4 4"
                 label={{
@@ -133,14 +147,18 @@ export function ROASGuardian() {
           <TrendingDown className="text-aura mt-0.5 h-4 w-4 shrink-0" />
           <div className="flex flex-col gap-1">
             <span className="text-foreground text-sm font-medium">
-              {guardianActive
+              {guardianActive && data.belowThreshold
                 ? "Campana Pausada - Sugiriendo nuevo Copy"
-                : "ROAS Bajo Detectado - Solo Observando"}
+                : data.belowThreshold
+                  ? "ROAS Bajo Detectado - Solo Observando"
+                  : "ROAS Estable - Monitoreo Continuo"}
             </span>
             <span className="text-muted-foreground text-xs">
-              {guardianActive
-                ? "ROAS cayo debajo del umbral de 1.5x. Rol.IA pauso la campana automaticamente y genero 3 variaciones de copy alternativo."
-                : "ROAS cayo debajo del umbral de 1.5x. Modo Observador activo - no se toman acciones automaticas."}
+              {guardianActive && data.belowThreshold
+                ? `ROAS cayo debajo del umbral de ${data.threshold}x. Rol.IA pauso la campana automaticamente y genero 3 variaciones de copy alternativo.`
+                : data.belowThreshold
+                  ? `ROAS cayo debajo del umbral de ${data.threshold}x. Modo Observador activo - no se toman acciones automaticas.`
+                  : `ROAS se mantiene por encima del umbral de ${data.threshold}x. Monitoreando rendimiento.`}
             </span>
           </div>
         </motion.div>

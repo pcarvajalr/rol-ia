@@ -1,6 +1,13 @@
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Loader2, AlertCircle, Mail, Lock } from "lucide-react"
+import {
+  Loader2,
+  AlertCircle,
+  Mail,
+  Lock,
+  Building2,
+  Link2,
+} from "lucide-react"
 import { useNavigate } from "react-router"
 import { Input } from "@/components/ui/input"
 import { RolLogo } from "@/components/rol-logo"
@@ -8,25 +15,64 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { useAuthStore } from "@/stores/auth-store"
 
-export function LoginScreen() {
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+}
+
+export function RegisterPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+  const [tenantName, setTenantName] = useState("")
+  const [slugEdited, setSlugEdited] = useState(false)
+  const [slug, setSlug] = useState("")
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
+  const [localError, setLocalError] = useState("")
   const [shake, setShake] = useState(false)
-  const navigate = useNavigate()
 
-  const login = useAuthStore((s) => s.login)
+  const navigate = useNavigate()
+  const register = useAuthStore((s) => s.register)
+  const autoSlug = useMemo(() => slugify(tenantName), [tenantName])
+  const finalSlug = slugEdited ? slug : autoSlug
+
+  const error = localError
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError("")
-    setLoading(true)
+    setLocalError("")
 
+    if (password !== confirmPassword) {
+      setLocalError("Las claves no coinciden.")
+      setShake(true)
+      setTimeout(() => setShake(false), 600)
+      return
+    }
+
+    if (password.length < 6) {
+      setLocalError("La clave debe tener al menos 6 caracteres.")
+      setShake(true)
+      setTimeout(() => setShake(false), 600)
+      return
+    }
+
+    if (!finalSlug) {
+      setLocalError("El slug de empresa es obligatorio.")
+      setShake(true)
+      setTimeout(() => setShake(false), 600)
+      return
+    }
+
+    setLoading(true)
     try {
-      await login(email, password)
+      await register(email, password, tenantName, finalSlug)
+      // authStatus will change to pending_verification, App.tsx handles routing
     } catch {
-      setError("Credenciales invalidas. Verifique email y clave.")
       setShake(true)
       setTimeout(() => setShake(false), 600)
     } finally {
@@ -65,9 +111,9 @@ export function LoginScreen() {
         {/* Top accent line */}
         <div className="bg-aura h-1 w-full" />
 
-        <div className="flex flex-col gap-8 p-8">
+        <div className="flex flex-col gap-6 p-8">
           {/* Logo and title */}
-          <div className="flex flex-col items-center gap-5">
+          <div className="flex flex-col items-center gap-4">
             <motion.div
               className="bg-aura/5 border-aura/10 flex items-center justify-center rounded-2xl border px-8 py-5"
               animate={{
@@ -83,19 +129,19 @@ export function LoginScreen() {
             </motion.div>
             <div className="flex flex-col items-center gap-1">
               <p className="text-foreground text-sm font-medium">
-                Centro de Comando
+                Crear cuenta
               </p>
               <p className="text-muted-foreground text-xs">
-                Ingrese sus credenciales para continuar
+                Registra tu empresa para comenzar
               </p>
             </div>
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
               <Label
-                htmlFor="email"
+                htmlFor="reg-email"
                 className="text-muted-foreground text-xs font-medium uppercase tracking-wider"
               >
                 Email
@@ -103,7 +149,7 @@ export function LoginScreen() {
               <div className="relative">
                 <Mail className="text-muted-foreground absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
                 <Input
-                  id="email"
+                  id="reg-email"
                   type="email"
                   placeholder="correo@empresa.com"
                   value={email}
@@ -117,7 +163,7 @@ export function LoginScreen() {
 
             <div className="flex flex-col gap-2">
               <Label
-                htmlFor="password"
+                htmlFor="reg-password"
                 className="text-muted-foreground text-xs font-medium uppercase tracking-wider"
               >
                 Clave
@@ -125,16 +171,86 @@ export function LoginScreen() {
               <div className="relative">
                 <Lock className="text-muted-foreground absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
                 <Input
-                  id="password"
+                  id="reg-password"
                   type="password"
-                  placeholder="Ingrese su clave"
+                  placeholder="Minimo 6 caracteres"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  autoComplete="current-password"
+                  autoComplete="new-password"
                   className="border-border/60 bg-secondary/50 focus:border-aura/50 focus:ring-aura/20 h-11 pl-10 text-sm"
                 />
               </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label
+                htmlFor="reg-confirm"
+                className="text-muted-foreground text-xs font-medium uppercase tracking-wider"
+              >
+                Confirmar clave
+              </Label>
+              <div className="relative">
+                <Lock className="text-muted-foreground absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+                <Input
+                  id="reg-confirm"
+                  type="password"
+                  placeholder="Repita su clave"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  autoComplete="new-password"
+                  className="border-border/60 bg-secondary/50 focus:border-aura/50 focus:ring-aura/20 h-11 pl-10 text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label
+                htmlFor="reg-tenant"
+                className="text-muted-foreground text-xs font-medium uppercase tracking-wider"
+              >
+                Nombre de empresa
+              </Label>
+              <div className="relative">
+                <Building2 className="text-muted-foreground absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+                <Input
+                  id="reg-tenant"
+                  type="text"
+                  placeholder="Mi Empresa S.A."
+                  value={tenantName}
+                  onChange={(e) => setTenantName(e.target.value)}
+                  required
+                  className="border-border/60 bg-secondary/50 focus:border-aura/50 focus:ring-aura/20 h-11 pl-10 text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label
+                htmlFor="reg-slug"
+                className="text-muted-foreground text-xs font-medium uppercase tracking-wider"
+              >
+                Slug
+              </Label>
+              <div className="relative">
+                <Link2 className="text-muted-foreground absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+                <Input
+                  id="reg-slug"
+                  type="text"
+                  placeholder="mi-empresa"
+                  value={finalSlug}
+                  onChange={(e) => {
+                    setSlug(e.target.value)
+                    setSlugEdited(true)
+                  }}
+                  required
+                  className="border-border/60 bg-secondary/50 focus:border-aura/50 focus:ring-aura/20 h-11 pl-10 text-sm"
+                />
+              </div>
+              <p className="text-muted-foreground/60 text-[11px]">
+                Identificador unico de tu empresa (auto-generado)
+              </p>
             </div>
 
             <AnimatePresence>
@@ -159,10 +275,10 @@ export function LoginScreen() {
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Verificando...
+                  Registrando...
                 </>
               ) : (
-                "Ingresar"
+                "Crear cuenta"
               )}
             </Button>
           </form>
@@ -171,10 +287,10 @@ export function LoginScreen() {
           <div className="flex flex-col items-center gap-3">
             <button
               type="button"
-              onClick={() => navigate("/register")}
+              onClick={() => navigate("/login")}
               className="text-aura hover:text-aura/80 text-xs font-medium transition-colors"
             >
-              Crear cuenta
+              Ya tengo cuenta
             </button>
             <p className="text-muted-foreground/50 text-center text-[11px]">
               Acceso restringido. Solo personal autorizado.

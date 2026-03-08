@@ -37,15 +37,19 @@ model Tenant {
 }
 
 model User {
-  id          String   @id @default(uuid()) @db.Uuid
-  tenantId    String   @map("tenant_id") @db.Uuid
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String?   @map("tenant_id") @db.Uuid
   firebaseUid String   @unique @map("firebase_uid")
   email       String
+  name        String?
   role        String   @default("viewer")
+  approved    Boolean  @default(false)
+  approvedAt  DateTime? @map("approved_at")
+  approvedBy  String?   @map("approved_by")
   permissions Json     @default("{}")
   createdAt   DateTime @default(now()) @map("created_at")
 
-  tenant Tenant @relation(fields: [tenantId], references: [id])
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
   @@map("users")

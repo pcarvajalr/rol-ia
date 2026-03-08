@@ -10,6 +10,7 @@ if (!admin.apps.length) {
 export interface AuthUser {
   firebaseUid: string
   email: string
+  emailVerified: boolean
 }
 
 export const authMiddleware = createMiddleware<{
@@ -27,6 +28,7 @@ export const authMiddleware = createMiddleware<{
     c.set("authUser", {
       firebaseUid: decoded.uid,
       email: decoded.email ?? "",
+      emailVerified: decoded.email_verified ?? false,
     })
     await next()
   } catch {

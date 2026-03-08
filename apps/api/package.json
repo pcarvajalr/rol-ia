@@ -3,13 +3,15 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "dev": "prisma generate && tsx watch --env-file=.env src/index.ts",
+    "build": "prisma generate && tsc",
+    "postinstall": "prisma generate",
     "start": "node dist/index.js",
     "lint": "tsc --noEmit",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "db:seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.0",

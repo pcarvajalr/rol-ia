@@ -10,9 +10,13 @@ import {
   Search,
   TrendingUp,
   ChevronRight,
+  LogOut,
+  ShieldCheck,
 } from "lucide-react"
+import { useNavigate } from "react-router"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import {
   Collapsible,
   CollapsibleTrigger,
@@ -24,11 +28,11 @@ import { SLATracker } from "@/components/sla-tracker"
 import { ROASGuardian } from "@/components/roas-guardian"
 import { RescueHistory } from "@/components/rescue-history"
 import { ActivityFeed } from "@/components/activity-feed"
-import { DemoToggle } from "@/components/demo-toggle"
 import { GuardianConfig } from "@/components/guardian-config"
 import { SecurityVault } from "@/components/security-vault"
 import { HelpPanel } from "@/components/help-panel"
 import { RolLogo, RolIcon } from "@/components/rol-logo"
+import { useAuthStore } from "@/stores/auth-store"
 
 /* Intel panels */
 import { IntelCPARealtime } from "@/components/intel-cpa-realtime"
@@ -135,7 +139,10 @@ const fadeIn = (delay = 0) => ({
 })
 
 export function DashboardPage() {
-  const [demoMode, setDemoMode] = useState(false)
+  const user = useAuthStore((s) => s.user)
+  const authStatus = useAuthStore((s) => s.authStatus)
+  const logout = useAuthStore((s) => s.logout)
+  const navigate = useNavigate()
   const [slaMinutes, setSlaMinutes] = useState(7)
   const [criticalState, setCriticalState] = useState("cold-lead")
   const [doubleTouchMinutes, setDoubleTouchMinutes] = useState(2)
@@ -158,9 +165,41 @@ export function DashboardPage() {
               Centro de Comando
             </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <HelpPanel />
-            <DemoToggle enabled={demoMode} onToggle={setDemoMode} />
+            {user && (
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground hidden text-xs sm:block">
+                  {user.name || user.email}
+                </span>
+                <Badge
+                  variant="outline"
+                  className="border-aura/30 text-aura text-[10px]"
+                >
+                  {user.role}
+                </Badge>
+              </div>
+            )}
+            {authStatus === "superadmin" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigate("/admin")}
+                className="text-aura hover:text-aura/80 h-8 gap-1.5 text-xs"
+              >
+                <ShieldCheck className="h-3.5 w-3.5" />
+                Admin
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={logout}
+              className="text-muted-foreground hover:text-foreground h-8 gap-1.5 text-xs"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Salir</span>
+            </Button>
           </div>
         </div>
       </header>
@@ -291,7 +330,7 @@ export function DashboardPage() {
                 <div className="flex flex-col gap-6">
                   <motion.div {...fadeIn(0)}>
                     <SLATracker
-                      demoMode={demoMode}
+                      demoMode={false}
                       slaMinutes={slaMinutes}
                       doubleTouchMinutes={doubleTouchMinutes}
                     />

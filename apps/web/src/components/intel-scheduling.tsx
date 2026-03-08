@@ -4,6 +4,9 @@ import { motion, AnimatePresence } from "framer-motion"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { CalendarCheck, Shield, Eye, Clock, CheckCircle2, PhoneCall, Video } from "lucide-react"
+import { useIntelFetch } from "@/hooks/use-intel-fetch"
+import { IntelEmptyState } from "./intel-empty-state"
+import { Skeleton } from "@/components/ui/skeleton"
 
 interface Appointment {
   id: string
@@ -14,13 +17,9 @@ interface Appointment {
   agent: string
 }
 
-const baseAppointments: Appointment[] = [
-  { id: "C-001", lead: "Carlos Perez", time: "10:30", channel: "voz", status: "confirmada", agent: "Rol G7" },
-  { id: "C-002", lead: "Maria Lopez", time: "11:00", channel: "whatsapp", status: "en-curso", agent: "Rol G7" },
-  { id: "C-003", lead: "Juan Ruiz", time: "11:45", channel: "voz", status: "pendiente", agent: "Rol G7" },
-  { id: "C-004", lead: "Sofia Diaz", time: "14:00", channel: "voz", status: "pendiente", agent: "Rol G7" },
-  { id: "C-005", lead: "Luis Torres", time: "15:30", channel: "whatsapp", status: "pendiente", agent: "Rol G7" },
-]
+interface SchedulingData {
+  appointments: Appointment[]
+}
 
 const statusConfig = {
   confirmada: { label: "Confirmada", color: "text-rescue", border: "border-rescue/20", bg: "bg-rescue/10", dot: "bg-rescue" },
@@ -29,10 +28,16 @@ const statusConfig = {
 }
 
 export function IntelScheduling() {
+  const { data: fetched, loading } = useIntelFetch<SchedulingData>("/api/intel/scheduling", { appointments: [] })
   const [guardianActive, setGuardianActive] = useState(true)
-  const [appointments, setAppointments] = useState(baseAppointments)
+  const [appointments, setAppointments] = useState<Appointment[]>([])
 
   useEffect(() => {
+    if (fetched.appointments.length > 0) setAppointments(fetched.appointments)
+  }, [fetched.appointments])
+
+  useEffect(() => {
+    if (appointments.length === 0) return
     const id = setInterval(() => {
       setAppointments((prev) =>
         prev.map((a) => {
@@ -44,7 +49,10 @@ export function IntelScheduling() {
       )
     }, 5000)
     return () => clearInterval(id)
-  }, [])
+  }, [appointments.length > 0])
+
+  if (loading) return <Skeleton className="h-[380px] rounded-xl" />
+  if (appointments.length === 0 && fetched.appointments.length === 0) return <IntelEmptyState />
 
   const confirmed = appointments.filter((a) => a.status === "confirmada").length
   const total = appointments.length

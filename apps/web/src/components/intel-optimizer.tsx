@@ -13,6 +13,9 @@ import {
   Cell,
   Tooltip,
 } from "recharts"
+import { useIntelFetch } from "@/hooks/use-intel-fetch"
+import { IntelEmptyState } from "./intel-empty-state"
+import { Skeleton } from "@/components/ui/skeleton"
 
 interface AdPerformance {
   name: string
@@ -23,19 +26,9 @@ interface AdPerformance {
   suggestedBudget: number
 }
 
-const ads: AdPerformance[] = [
-  { name: "Carrusel Urgencia", cpl: 4200, trend: "down", status: "winner", budget: 50000, suggestedBudget: 80000 },
-  { name: "Video Testimonial", cpl: 5100, trend: "down", status: "winner", budget: 35000, suggestedBudget: 55000 },
-  { name: "Story Lead Form", cpl: 8900, trend: "up", status: "loser", budget: 40000, suggestedBudget: 15000 },
-  { name: "Banner Estatico", cpl: 12300, trend: "up", status: "paused", budget: 30000, suggestedBudget: 0 },
-  { name: "Reel Educativo", cpl: 6200, trend: "stable", status: "winner", budget: 25000, suggestedBudget: 40000 },
-]
-
-const chartData = ads.map((a) => ({
-  name: a.name.length > 12 ? a.name.slice(0, 12) + "..." : a.name,
-  cpl: a.cpl,
-  status: a.status,
-}))
+interface OptimizerData {
+  ads: AdPerformance[]
+}
 
 const trendIcon = {
   up: <ArrowUpRight className="h-3 w-3" />,
@@ -66,7 +59,19 @@ function formatMoney(n: number) {
 }
 
 export function IntelOptimizer() {
+  const { data, loading } = useIntelFetch<OptimizerData>("/api/intel/optimizer", { ads: [] })
   const [guardianActive, setGuardianActive] = useState(false)
+
+  if (loading) return <Skeleton className="h-[450px] rounded-xl" />
+  if (data.ads.length === 0) return <IntelEmptyState />
+
+  const ads = data.ads as AdPerformance[]
+
+  const chartData = ads.map((a) => ({
+    name: a.name.length > 12 ? a.name.slice(0, 12) + "..." : a.name,
+    cpl: a.cpl,
+    status: a.status,
+  }))
 
   const totalSaved = ads.reduce((acc, a) => {
     const diff = a.budget - a.suggestedBudget

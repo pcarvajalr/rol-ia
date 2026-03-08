@@ -3,7 +3,10 @@ import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Users, Shield, Eye, Clock, AlertTriangle } from "lucide-react"
+import { Users, Shield, Eye, Clock } from "lucide-react"
+import { useIntelFetch } from "@/hooks/use-intel-fetch"
+import { IntelEmptyState } from "./intel-empty-state"
+import { Skeleton } from "@/components/ui/skeleton"
 
 interface Lead {
   id: string
@@ -13,14 +16,9 @@ interface Lead {
   maxMs: number
 }
 
-const initialLeads: Lead[] = [
-  { id: "L-001", name: "Carlos Perez", source: "Meta", waitMs: 0, maxMs: 900000 },
-  { id: "L-002", name: "Ana Gomez", source: "Google", waitMs: 0, maxMs: 720000 },
-  { id: "L-003", name: "Luis Torres", source: "Meta", waitMs: 0, maxMs: 600000 },
-  { id: "L-004", name: "Maria Lopez", source: "Google", waitMs: 0, maxMs: 480000 },
-  { id: "L-005", name: "Juan Ruiz", source: "Organico", waitMs: 0, maxMs: 840000 },
-  { id: "L-006", name: "Sofia Diaz", source: "Meta", waitMs: 0, maxMs: 540000 },
-]
+interface AbandonmentData {
+  leads: Lead[]
+}
 
 function getStatus(ms: number): { label: string; color: string; bg: string; border: string } {
   const min = ms / 60000
@@ -37,15 +35,18 @@ function formatAgony(ms: number) {
 }
 
 export function IntelAbandonment() {
+  const { data: fetched, loading } = useIntelFetch<AbandonmentData>("/api/intel/abandonment", { leads: [] })
   const [guardianActive, setGuardianActive] = useState(false)
-  const [leads, setLeads] = useState<Lead[]>(() =>
-    initialLeads.map((l, i) => ({
-      ...l,
-      waitMs: (i + 1) * 135000 + Math.floor(Math.random() * 60000),
-    }))
-  )
+  const [leads, setLeads] = useState<Lead[]>([])
 
   useEffect(() => {
+    if (fetched.leads.length > 0) {
+      setLeads(fetched.leads)
+    }
+  }, [fetched.leads])
+
+  useEffect(() => {
+    if (leads.length === 0) return
     const id = setInterval(() => {
       setLeads((prev) =>
         prev.map((l) => ({
@@ -55,7 +56,10 @@ export function IntelAbandonment() {
       )
     }, 1000)
     return () => clearInterval(id)
-  }, [])
+  }, [leads.length > 0])
+
+  if (loading) return <Skeleton className="h-[400px] rounded-xl" />
+  if (leads.length === 0 && fetched.leads.length === 0) return <IntelEmptyState />
 
   const sorted = [...leads].sort((a, b) => b.waitMs - a.waitMs)
   const critical = sorted.filter((l) => l.waitMs / 60000 > 10).length

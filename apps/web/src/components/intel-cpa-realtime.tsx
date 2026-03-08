@@ -1,9 +1,7 @@
 
 import { useState, useEffect, useCallback } from "react"
-import { motion } from "framer-motion"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Switch } from "@/components/ui/switch"
 import { Activity, Shield, Eye } from "lucide-react"
 import {
   AreaChart,
@@ -12,30 +10,35 @@ import {
   YAxis,
   ResponsiveContainer,
   Tooltip,
-  Legend,
 } from "recharts"
+import { useIntelFetch } from "@/hooks/use-intel-fetch"
+import { IntelEmptyState } from "./intel-empty-state"
+import { Skeleton } from "@/components/ui/skeleton"
 
-function generateMinuteData() {
-  const data = []
-  for (let i = 0; i < 30; i++) {
-    const hour = 8 + Math.floor(i / 6)
-    const min = (i % 6) * 10
-    const label = `${String(hour).padStart(2, "0")}:${String(min).padStart(2, "0")}`
-    const metaSpend = Math.round(15 + Math.random() * 35)
-    const googleSpend = Math.round(10 + Math.random() * 25)
-    const metaConv = Math.round(1 + Math.random() * 6)
-    const googleConv = Math.round(0.5 + Math.random() * 4)
-    data.push({ time: label, metaSpend, googleSpend, metaConv, googleConv })
-  }
-  return data
+interface CPAPoint {
+  time: string
+  metaSpend: number
+  googleSpend: number
+  metaConv: number
+  googleConv: number
+}
+
+interface CPAData {
+  points: CPAPoint[]
 }
 
 export function IntelCPARealtime() {
-  const [data, setData] = useState(() => generateMinuteData())
+  const { data: fetched, loading } = useIntelFetch<CPAData>("/api/intel/cpa-realtime", { points: [] })
+  const [data, setData] = useState<CPAPoint[]>([])
   const [guardianActive, setGuardianActive] = useState(false)
+
+  useEffect(() => {
+    if (fetched.points.length > 0) setData(fetched.points)
+  }, [fetched.points])
 
   const addPoint = useCallback(() => {
     setData((prev) => {
+      if (prev.length === 0) return prev
       const last = prev[prev.length - 1]
       const parts = last.time.split(":")
       let h = parseInt(parts[0])
@@ -54,9 +57,13 @@ export function IntelCPARealtime() {
   }, [])
 
   useEffect(() => {
+    if (data.length === 0) return
     const id = setInterval(addPoint, 4000)
     return () => clearInterval(id)
-  }, [addPoint])
+  }, [addPoint, data.length > 0])
+
+  if (loading) return <Skeleton className="h-[350px] rounded-xl" />
+  if (data.length === 0) return <IntelEmptyState />
 
   const totalSpend = data.reduce((s, d) => s + d.metaSpend + d.googleSpend, 0)
   const totalConv = data.reduce((s, d) => s + d.metaConv + d.googleConv, 0)
