@@ -385,7 +385,7 @@ async function main() {
         contenido: h.contenido,
         categoria: h.categoria,
         scoreProbabilidad: h.scoreProbabilidad,
-        briefVisual: h.briefVisual,
+        briefVisual: h.briefVisual ?? undefined,
         createdAt: new Date(),
       },
     });
