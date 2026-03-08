@@ -14,7 +14,7 @@ const app = new Hono()
 
 app.use("*", logger())
 app.use("*", cors({
-  origin: ["http://localhost:5173"],
+  origin: ["http://localhost:5173", "https://rolia-92d5d.web.app", "https://rolia-92d5d.firebaseapp.com"],
   credentials: true,
 }))
 

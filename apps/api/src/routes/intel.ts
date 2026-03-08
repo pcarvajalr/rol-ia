@@ -432,9 +432,10 @@ intel.get("/activity-feed", async (c) => {
     const time = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`
 
     let type: string
+    const desc = e.descripcion ?? ""
     if (e.actorIntervencion === "IA") type = "whatsapp"
-    else if (e.descripcion.toLowerCase().includes("llamada")) type = "vapi"
-    else if (e.descripcion.toLowerCase().includes("cita") || e.descripcion.toLowerCase().includes("exito")) type = "success"
+    else if (desc.toLowerCase().includes("llamada")) type = "vapi"
+    else if (desc.toLowerCase().includes("cita") || desc.toLowerCase().includes("exito")) type = "success"
     else type = "webhook"
 
     return {
