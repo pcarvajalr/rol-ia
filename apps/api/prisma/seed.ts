@@ -177,6 +177,77 @@ async function main() {
   }
   console.log("  ConfigGuardian: 7 records");
 
+  // ---- Integration Platforms ----
+  await prisma.tenantIntegration.deleteMany({});
+  await prisma.integrationField.deleteMany({});
+  await prisma.integrationPlatform.deleteMany({});
+
+  const platforms = [
+    {
+      name: "WhatsApp",
+      slug: "whatsapp",
+      icon: "MessageSquare",
+      category: "messaging",
+      sortOrder: 1,
+      fields: [
+        { label: "ID Cuenta", fieldKey: "account_id", fieldType: "text", sortOrder: 1 },
+        { label: "ID Dispositivo", fieldKey: "device_id", fieldType: "text", sortOrder: 2 },
+        { label: "Numero de Envio", fieldKey: "phone_number", fieldType: "text", sortOrder: 3 },
+        { label: "Token de Acceso", fieldKey: "access_token", fieldType: "secret", sortOrder: 4 },
+      ],
+    },
+    {
+      name: "Vapi",
+      slug: "vapi",
+      icon: "Mic",
+      category: "voice",
+      sortOrder: 2,
+      fields: [
+        { label: "ID de Asistente", fieldKey: "assistant_id", fieldType: "text", sortOrder: 1 },
+        { label: "ID de Linea", fieldKey: "line_id", fieldType: "text", sortOrder: 2 },
+        { label: "Token de Autorizacion", fieldKey: "auth_token", fieldType: "secret", sortOrder: 3 },
+      ],
+    },
+    {
+      name: "Telefonia",
+      slug: "telephony",
+      icon: "Phone",
+      category: "telephony",
+      sortOrder: 3,
+      fields: [
+        { label: "SID", fieldKey: "sid", fieldType: "text", sortOrder: 1 },
+        { label: "Numero de Origen", fieldKey: "from_number", fieldType: "text", sortOrder: 2 },
+        { label: "Token Privado", fieldKey: "private_token", fieldType: "secret", sortOrder: 3 },
+      ],
+    },
+    {
+      name: "Clientify",
+      slug: "clientify",
+      icon: "Database",
+      category: "crm",
+      sortOrder: 4,
+      fields: [
+        { label: "Token de Integracion API", fieldKey: "api_token", fieldType: "secret", sortOrder: 1 },
+      ],
+    },
+  ];
+
+  for (const p of platforms) {
+    const { fields, ...platformData } = p;
+    const platform = await prisma.integrationPlatform.create({
+      data: platformData,
+    });
+    for (const f of fields) {
+      await prisma.integrationField.create({
+        data: {
+          platformId: platform.id,
+          ...f,
+        },
+      });
+    }
+  }
+  console.log("  IntegrationPlatforms: 4 platforms with fields");
+
   // ---- LeadTracking (6 leads matching abandonment component) ----
   const now = new Date();
 

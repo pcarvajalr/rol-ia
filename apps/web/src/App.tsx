@@ -9,6 +9,7 @@ import { DashboardPage } from "@/pages/DashboardPage"
 import { AdminLayout } from "@/pages/admin/AdminLayout"
 import { PendingUsersPage } from "@/pages/admin/PendingUsersPage"
 import { TenantsPage } from "@/pages/admin/TenantsPage"
+import { PlatformsPage } from "@/pages/admin/PlatformsPage"
 
 export function App() {
   const init = useAuthStore((s) => s.init)
@@ -69,6 +70,7 @@ export function App() {
           <Route index element={<Navigate to="/admin/pending-users" replace />} />
           <Route path="pending-users" element={<PendingUsersPage />} />
           <Route path="tenants" element={<TenantsPage />} />
+          <Route path="platforms" element={<PlatformsPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>

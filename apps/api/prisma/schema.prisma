@@ -17,11 +17,13 @@ model Tenant {
   plan             String   @default("free")
   settings         Json     @default("{}")
   apiKeysEncrypted Json?    @map("api_keys_encrypted")
+  vaultPinHash     String?  @map("vault_pin_hash")
   active           Boolean  @default(true)
   createdAt        DateTime @default(now()) @map("created_at")
 
   users              User[]
   configGuardianes   ConfigGuardian[]
+  integrations       TenantIntegration[]
   leadsTracking      LeadTracking[]
   leadsEventHistory  LeadEventHistory[]
   citasAgendadas     CitaAgendada[]
@@ -237,6 +239,58 @@ model MetricsRoasHistory {
   @@index([tenantId])
   @@index([tenantId, fecha])
   @@map("metrics_roas_history")
+}
+
+// === INTEGRACIONES ===
+
+model IntegrationPlatform {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String   @unique
+  icon      String?
+  category  String
+  isActive  Boolean  @default(true) @map("is_active")
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  fields       IntegrationField[]
+  integrations TenantIntegration[]
+
+  @@map("integration_platforms")
+}
+
+model IntegrationField {
+  id         String  @id @default(uuid()) @db.Uuid
+  platformId String  @map("platform_id") @db.Uuid
+  label      String
+  fieldKey   String  @map("field_key")
+  fieldType  String  @default("secret") @map("field_type")
+  required   Boolean @default(true)
+  sortOrder  Int     @default(0) @map("sort_order")
+
+  platform IntegrationPlatform @relation(fields: [platformId], references: [id], onDelete: Cascade)
+
+  @@unique([platformId, fieldKey])
+  @@map("integration_fields")
+}
+
+model TenantIntegration {
+  id                   String    @id @default(uuid()) @db.Uuid
+  tenantId             String    @map("tenant_id") @db.Uuid
+  platformId           String    @map("platform_id") @db.Uuid
+  credentialsEncrypted String    @map("credentials_encrypted")
+  iv                   String
+  isActive             Boolean   @default(true) @map("is_active")
+  connectedAt          DateTime? @map("connected_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  tenant   Tenant              @relation(fields: [tenantId], references: [id])
+  platform IntegrationPlatform @relation(fields: [platformId], references: [id])
+
+  @@unique([tenantId, platformId])
+  @@index([tenantId])
+  @@map("tenant_integrations")
 }
 
 // === PREDICTIVOS ===

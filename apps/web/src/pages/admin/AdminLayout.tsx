@@ -1,11 +1,12 @@
 import { NavLink, Outlet } from "react-router"
 import { motion } from "framer-motion"
-import { ArrowLeft, Users, Building2 } from "lucide-react"
+import { ArrowLeft, Users, Building2, Plug } from "lucide-react"
 import { RolLogo } from "@/components/rol-logo"
 
 const navItems = [
   { to: "/admin/pending-users", label: "Solicitudes", icon: Users },
   { to: "/admin/tenants", label: "Empresas", icon: Building2 },
+  { to: "/admin/platforms", label: "Integraciones", icon: Plug },
 ]
 
 export function AdminLayout() {
