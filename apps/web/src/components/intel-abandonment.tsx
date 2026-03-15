@@ -1,12 +1,14 @@
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Users, Shield, Eye, Clock } from "lucide-react"
-import { useIntelFetch } from "@/hooks/use-intel-fetch"
+import { useAuthStore } from "@/stores/auth-store"
 import { IntelEmptyState } from "./intel-empty-state"
 import { Skeleton } from "@/components/ui/skeleton"
+
+const API_URL = import.meta.env.VITE_API_URL || ""
 
 interface Lead {
   id: string
@@ -35,16 +37,36 @@ function formatAgony(ms: number) {
 }
 
 export function IntelAbandonment() {
-  const { data: fetched, loading } = useIntelFetch<AbandonmentData>("/api/intel/abandonment", { leads: [] })
+  const token = useAuthStore((s) => s.token)
   const [guardianActive, setGuardianActive] = useState(false)
   const [leads, setLeads] = useState<Lead[]>([])
+  const [loading, setLoading] = useState(true)
+
+  // Fetch con polling cada 15s — aislado del hook compartido
+  const fetchLeads = useCallback(async () => {
+    if (!token) return
+    try {
+      const res = await fetch(`${API_URL}/api/intel/abandonment`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) return
+      const json = (await res.json()) as AbandonmentData
+      if (json.leads.length > 0) {
+        setLeads(json.leads)
+      }
+      setLoading(false)
+    } catch {
+      setLoading(false)
+    }
+  }, [token])
 
   useEffect(() => {
-    if (fetched.leads.length > 0) {
-      setLeads(fetched.leads)
-    }
-  }, [fetched.leads])
+    fetchLeads()
+    const id = setInterval(fetchLeads, 15000)
+    return () => clearInterval(id)
+  }, [fetchLeads])
 
+  // Timer local: incrementa waitMs cada segundo
   useEffect(() => {
     if (leads.length === 0) return
     const id = setInterval(() => {
@@ -59,7 +81,7 @@ export function IntelAbandonment() {
   }, [leads.length > 0])
 
   if (loading) return <Skeleton className="h-[400px] rounded-xl" />
-  if (leads.length === 0 && fetched.leads.length === 0) return <IntelEmptyState />
+  if (leads.length === 0) return <IntelEmptyState />
 
   const sorted = [...leads].sort((a, b) => b.waitMs - a.waitMs)
   const critical = sorted.filter((l) => l.waitMs / 60000 > 10).length
