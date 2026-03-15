@@ -50,6 +50,7 @@ webhookRouter.post("/:plataforma/:idEmpresa", async (c) => {
 
   // 3. Procesar y responder
   const body = await c.req.json()
+  console.log(`[webhook] Headers de ${plataforma}:`, JSON.stringify(Object.fromEntries(c.req.raw.headers.entries())))
   console.log(`[webhook] Payload recibido de ${plataforma}:`, JSON.stringify(body))
 
   try {
