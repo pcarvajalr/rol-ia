@@ -118,7 +118,29 @@ export function SecurityVault() {
       })
       if (res.ok) {
         const data = await res.json()
-        setIntegrations(data.integrations ?? [])
+        const integs = (data.integrations ?? []) as Integration[]
+        setIntegrations(integs)
+
+        // Cargar valores masked de plataformas conectadas
+        const newCreds: Record<string, Record<string, string>> = {}
+        for (const mod of integs) {
+          if (mod.isConnected) {
+            try {
+              const credRes = await fetch(`${API_URL}/api/vault/integrations/${mod.slug}`, {
+                headers: { Authorization: `Bearer ${token}` },
+              })
+              if (credRes.ok) {
+                const credData = await credRes.json()
+                if (credData.maskedCredentials) {
+                  newCreds[mod.id] = credData.maskedCredentials
+                }
+              }
+            } catch {
+              // silently fail per platform
+            }
+          }
+        }
+        setCredentials((prev) => ({ ...prev, ...newCreds }))
       }
     } catch {
       // silently fail
