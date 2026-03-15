@@ -47,18 +47,16 @@ webhookRouter.post("/:plataforma/:idEmpresa", async (c) => {
     return c.json({ error: `Plataforma "${plataforma}" no soportada` }, 400)
   }
 
-  // 3. Responder 200 inmediatamente
+  // 3. Procesar y responder
   const body = await c.req.json()
 
-  setImmediate(async () => {
-    try {
-      if (plataforma === "clientify") {
-        await handleClientifyWebhook(idEmpresa, body)
-      }
-    } catch (error) {
-      console.error(`[webhook] Error procesando ${plataforma} para tenant ${idEmpresa}:`, error)
+  try {
+    if (plataforma === "clientify") {
+      await handleClientifyWebhook(idEmpresa, body)
     }
-  })
+  } catch (error) {
+    console.error(`[webhook] Error procesando ${plataforma} para tenant ${idEmpresa}:`, error)
+  }
 
   return c.json({ ok: true })
 })
@@ -209,27 +207,24 @@ webhookRouter.post("/meta", async (c) => {
 
   // Process button responses
   if (parsed.type === "button_reply" && parsed.buttonId) {
-    setImmediate(async () => {
-      try {
-        // Find lead by phone number (normalize: Meta sends without +, DB may have +)
-        const phoneVariants = [parsed.from, `+${parsed.from}`]
-        const lead = await prisma.leadTracking.findFirst({
-          where: {
-            tenantId,
-            telefono: { in: phoneVariants },
-          },
-        })
+    try {
+      // Find lead by phone number (normalize: Meta sends without +, DB may have +)
+      const phoneVariants = [parsed.from, `+${parsed.from}`]
+      const lead = await prisma.leadTracking.findFirst({
+        where: {
+          tenantId,
+          telefono: { in: phoneVariants },
+        },
+      })
 
-        if (!lead) {
-          console.error(`[webhook] No lead found for phone ${parsed.from} in tenant ${tenantId}`)
-          return
-        }
-
+      if (!lead) {
+        console.error(`[webhook] No lead found for phone ${parsed.from} in tenant ${tenantId}`)
+      } else {
         await handleButtonResponse(tenantId, lead.leadId, parsed.buttonId!)
-      } catch (error) {
-        console.error("[webhook] Error processing Meta callback:", error)
       }
-    })
+    } catch (error) {
+      console.error("[webhook] Error processing Meta callback:", error)
+    }
   }
 
   return c.json({ ok: true })
