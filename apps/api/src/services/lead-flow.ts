@@ -131,11 +131,16 @@ async function handleFirstTimeout(
     return
   }
 
-  // 3. Enviar template WhatsApp
+  // 3. Enviar WhatsApp: intentar template, si falla enviar texto
+  let mensajeEnviado = false
+  let metodoEnvio = ""
+
   try {
     await sendTemplate(tenantId, lead.telefono!, "rol_primer_contacto", "es", {
       nombre: lead.nombreLead,
     })
+    mensajeEnviado = true
+    metodoEnvio = "template"
   } catch (error: unknown) {
     const err = error as Error & { code?: string }
     if (err.code === "INVALID_NUMBER") {
@@ -163,8 +168,37 @@ async function handleFirstTimeout(
       await endFlow(tenantId, leadId)
       return
     }
-    throw error
+
+    // Template no existe o error al consultar — fallback a mensaje de texto
+    console.log(`[lead-flow] Template fallback for lead ${leadId}: ${err.message}`)
+    try {
+      await sendTextMessage(
+        tenantId,
+        lead.telefono!,
+        `Hola ${lead.nombreLead}, gracias por tu interés. Un asesor se pondrá en contacto contigo pronto.`
+      )
+      mensajeEnviado = true
+      metodoEnvio = "texto"
+    } catch (textError: unknown) {
+      const textErr = textError as Error & { code?: string }
+      if (textErr.code === "INVALID_NUMBER") {
+        const tipoTimeout = await prisma.catTipoEvento.findFirst({ where: { nombre: "Timeout" } })
+        if (tipoTimeout) {
+          await prisma.leadEventHistory.create({
+            data: { tenantId, leadId, idTipoEvento: tipoTimeout.id, actorIntervencion: "IA", descripcion: "Error: número de WhatsApp inválido" },
+          })
+        }
+        await sendEmailToOwner(tenantId, "Número de WhatsApp inválido", `<p>El lead <strong>${lead.nombreLead}</strong> tiene un número de WhatsApp inválido: ${lead.telefono}</p>`)
+        await endFlow(tenantId, leadId)
+        return
+      }
+      console.error(`[lead-flow] WhatsApp text also failed for lead ${leadId}:`, textErr.message)
+      await handleCredentialError(leadId, tenantId, lead.nombreLead, "whatsapp")
+      return
+    }
   }
+
+  if (!mensajeEnviado) return
 
   // 4. Actualizar estado a "Contactado"
   const estadoContactado = await prisma.catEstadoGestion.findFirst({
@@ -186,7 +220,7 @@ async function handleFirstTimeout(
         leadId,
         idTipoEvento: tipoWhatsApp.id,
         actorIntervencion: "IA",
-        descripcion: `Template rol_primer_contacto enviado a ${lead.telefono}`,
+        descripcion: `WhatsApp (${metodoEnvio}) enviado a ${lead.telefono}`,
       },
     })
   }
