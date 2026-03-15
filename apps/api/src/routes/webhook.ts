@@ -28,18 +28,19 @@ webhookRouter.post("/:plataforma/:idEmpresa", async (c) => {
 
   // 2. Autenticar según plataforma
   if (plataforma === "clientify") {
-    const authHeader = c.req.header("Authorization")
-    if (!authHeader?.startsWith("Token ")) {
-      return c.json({ error: "Token requerido" }, 401)
-    }
-
-    const token = authHeader.replace("Token ", "")
-
     try {
       const credentials = await validateCredentials(idEmpresa, "clientify", ["api_token"])
-      if (credentials.api_token !== token) {
-        return c.json({ error: "Token inválido" }, 401)
+
+      // Si viene header Authorization, validar token
+      const authHeader = c.req.header("Authorization")
+      if (authHeader?.startsWith("Token ")) {
+        const token = authHeader.replace("Token ", "")
+        if (credentials.api_token !== token) {
+          return c.json({ error: "Token inválido" }, 401)
+        }
       }
+      // Si no viene header, se acepta (Clientify no soporta headers custom en webhooks)
+      // La seguridad se basa en el tenantId (UUID) en la URL + integración activa
     } catch {
       return c.json({ error: "Integración no configurada" }, 401)
     }
