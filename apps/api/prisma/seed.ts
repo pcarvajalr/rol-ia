@@ -191,10 +191,11 @@ async function main() {
       category: "messaging",
       sortOrder: 1,
       fields: [
-        { label: "ID Cuenta", fieldKey: "account_id", fieldType: "text", sortOrder: 1 },
-        { label: "ID Dispositivo", fieldKey: "device_id", fieldType: "text", sortOrder: 2 },
-        { label: "Numero de Envio", fieldKey: "phone_number", fieldType: "text", sortOrder: 3 },
+        { label: "Número de WhatsApp", fieldKey: "phone_number", fieldType: "text", sortOrder: 1 },
+        { label: "Phone Number ID (Meta)", fieldKey: "phone_number_id", fieldType: "text", sortOrder: 2 },
+        { label: "ID Cuenta (WABA)", fieldKey: "account_id", fieldType: "text", sortOrder: 3 },
         { label: "Token de Acceso", fieldKey: "access_token", fieldType: "secret", sortOrder: 4 },
+        { label: "App Secret", fieldKey: "app_secret", fieldType: "secret", sortOrder: 5 },
       ],
     },
     {

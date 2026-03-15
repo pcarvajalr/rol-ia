@@ -2,6 +2,8 @@ import { serve } from "@hono/node-server"
 import { Hono } from "hono"
 import { cors } from "hono/cors"
 import { logger } from "hono/logger"
+import { webhookRouter } from "./routes/webhook"
+import { internalRouter } from "./routes/internal"
 import { authMiddleware } from "./middleware/auth"
 import { authRoutes } from "./routes/auth"
 import { adminRoutes } from "./routes/admin"
@@ -15,6 +17,11 @@ import type { AuthUser } from "./middleware/auth"
 const app = new Hono()
 
 app.use("*", logger())
+
+// Webhooks + internals — SIN CORS (llamados por servicios externos)
+app.route("/webhook", webhookRouter)
+app.route("/internal", internalRouter)
+
 app.use("*", cors({
   origin: ["http://localhost:5173", "https://rolia-92d5d.web.app", "https://rolia-92d5d.firebaseapp.com"],
   credentials: true,

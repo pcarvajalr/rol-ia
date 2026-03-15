@@ -2,7 +2,8 @@ import { Hono } from "hono"
 import { prisma } from "../db/client"
 import type { AuthUser } from "../middleware/auth"
 import type { TenantUser } from "../middleware/tenant"
-import { createHash, randomBytes, createCipheriv, createDecipheriv } from "crypto"
+import { createHash, randomBytes } from "crypto"
+import { encrypt, decrypt } from "../utils/encryption"
 
 const vaultRouter = new Hono<{
   Variables: {
@@ -167,31 +168,7 @@ vaultRouter.get("/integrations", async (c) => {
   return c.json({ integrations: result })
 })
 
-// ---- Encryption helpers ----
-const VAULT_KEY = process.env.VAULT_ENCRYPTION_KEY || "default-dev-key-change-in-production!!"
-
-function getEncryptionKey(): Buffer {
-  return createHash("sha256").update(VAULT_KEY).digest()
-}
-
-function encrypt(text: string): { encrypted: string; iv: string } {
-  const iv = randomBytes(16)
-  const cipher = createCipheriv("aes-256-gcm", getEncryptionKey(), iv)
-  let encrypted = cipher.update(text, "utf8", "hex")
-  encrypted += cipher.final("hex")
-  const authTag = cipher.getAuthTag().toString("hex")
-  return { encrypted: encrypted + ":" + authTag, iv: iv.toString("hex") }
-}
-
-function decrypt(encrypted: string, ivHex: string): string {
-  const [data, authTag] = encrypted.split(":")
-  const iv = Buffer.from(ivHex, "hex")
-  const decipher = createDecipheriv("aes-256-gcm", getEncryptionKey(), iv)
-  decipher.setAuthTag(Buffer.from(authTag, "hex"))
-  let decrypted = decipher.update(data, "hex", "utf8")
-  decrypted += decipher.final("utf8")
-  return decrypted
-}
+// Encryption helpers imported from utils/encryption.ts
 
 function maskValue(value: string): string {
   if (value.length <= 4) return "••••"

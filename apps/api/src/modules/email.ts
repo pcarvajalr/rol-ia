@@ -1,24 +1,6 @@
 import nodemailer from "nodemailer"
 import { prisma } from "../db/client"
-import { createHash, createDecipheriv } from "crypto"
-
-// ---- Vault decryption (same logic as vault.ts) ----
-
-const VAULT_KEY = process.env.VAULT_ENCRYPTION_KEY || "default-dev-key-change-in-production!!"
-
-function getEncryptionKey(): Buffer {
-  return createHash("sha256").update(VAULT_KEY).digest()
-}
-
-function decrypt(encrypted: string, ivHex: string): string {
-  const [data, authTag] = encrypted.split(":")
-  const iv = Buffer.from(ivHex, "hex")
-  const decipher = createDecipheriv("aes-256-gcm", getEncryptionKey(), iv)
-  decipher.setAuthTag(Buffer.from(authTag!, "hex"))
-  let decrypted = decipher.update(data!, "hex", "utf8")
-  decrypted += decipher.final("utf8")
-  return decrypted
-}
+import { decrypt } from "../utils/encryption"
 
 // ---- Types ----
 
