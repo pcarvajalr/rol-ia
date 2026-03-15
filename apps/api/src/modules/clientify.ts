@@ -1,11 +1,16 @@
 import { validateCredentials } from "../utils/encryption"
 
-interface ClientifyPayload {
+interface ClientifyWebhookBody {
+  hook?: { id: number; event: string; target: string }
+  data?: ClientifyContact
+}
+
+interface ClientifyContact {
   id: number
   first_name: string
   last_name?: string
-  email?: string
-  phone?: string
+  emails?: Array<{ email: string }>
+  phones?: Array<{ phone: string }>
   status?: string
   contact_source?: string
   company?: string
@@ -21,7 +26,10 @@ interface NormalizedLead {
 }
 
 export function parseClientifyPayload(body: unknown): NormalizedLead {
-  const payload = body as ClientifyPayload
+  const raw = body as ClientifyWebhookBody
+
+  // Clientify envía { hook: {...}, data: {...} } — el contacto está en data
+  const payload = raw?.data || (raw as unknown as ClientifyContact)
 
   if (!payload?.id || !payload?.first_name) {
     throw new Error("Payload inválido: se requiere id y first_name")
@@ -31,8 +39,8 @@ export function parseClientifyPayload(body: unknown): NormalizedLead {
     externalId: String(payload.id),
     nombreLead: [payload.first_name, payload.last_name].filter(Boolean).join(" "),
     fuente: payload.contact_source || "Clientify",
-    telefono: payload.phone || null,
-    email: payload.email || null,
+    telefono: payload.phones?.[0]?.phone || null,
+    email: payload.emails?.[0]?.email || null,
   }
 }
 
