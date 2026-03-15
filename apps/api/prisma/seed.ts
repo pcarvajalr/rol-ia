@@ -206,7 +206,7 @@ async function main() {
       sortOrder: 2,
       fields: [
         { label: "ID de Asistente", fieldKey: "assistant_id", fieldType: "text", sortOrder: 1 },
-        { label: "ID de Linea", fieldKey: "line_id", fieldType: "text", sortOrder: 2 },
+        { label: "Phone Number ID", fieldKey: "phone_number_id", fieldType: "text", sortOrder: 2 },
         { label: "Token de Autorizacion", fieldKey: "auth_token", fieldType: "secret", sortOrder: 3 },
       ],
     },

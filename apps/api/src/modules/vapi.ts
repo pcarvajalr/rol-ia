@@ -7,6 +7,7 @@ export async function makeOutboundCall(
   const credentials = await validateCredentials(tenantId, "vapi", [
     "assistant_id",
     "auth_token",
+    "phone_number_id",
   ])
 
   const response = await fetch("https://api.vapi.ai/call", {
@@ -17,6 +18,7 @@ export async function makeOutboundCall(
     },
     body: JSON.stringify({
       assistantId: credentials.assistant_id,
+      phoneNumberId: credentials.phone_number_id,
       customer: { number: phoneNumber },
     }),
   })
