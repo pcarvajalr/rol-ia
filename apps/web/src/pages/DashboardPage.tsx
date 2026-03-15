@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import {
   Shield,
@@ -33,6 +33,7 @@ import { SecurityVault } from "@/components/security-vault"
 import { HelpPanel } from "@/components/help-panel"
 import { RolLogo, RolIcon } from "@/components/rol-logo"
 import { useAuthStore } from "@/stores/auth-store"
+import { toast } from "sonner"
 
 /* Intel panels */
 import { IntelCPARealtime } from "@/components/intel-cpa-realtime"
@@ -141,11 +142,65 @@ const fadeIn = (delay = 0) => ({
 export function DashboardPage() {
   const user = useAuthStore((s) => s.user)
   const authStatus = useAuthStore((s) => s.authStatus)
+  const token = useAuthStore((s) => s.token)
   const logout = useAuthStore((s) => s.logout)
   const navigate = useNavigate()
   const [slaMinutes, setSlaMinutes] = useState(7)
   const [criticalState, setCriticalState] = useState("cold-lead")
   const [doubleTouchMinutes, setDoubleTouchMinutes] = useState(2)
+  const [tiempoRespuestaLeadSeg, setTiempoRespuestaLeadSeg] = useState(15)
+  const [isSavingGuardian, setIsSavingGuardian] = useState(false)
+  const [guardianLoaded, setGuardianLoaded] = useState(false)
+
+  useEffect(() => {
+    const loadGuardianSettings = async () => {
+      try {
+        if (!token) return
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/api/settings/guardian`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (res.ok) {
+          const data = await res.json()
+          setSlaMinutes(data.slaMinutes ?? 7)
+          setCriticalState(data.criticalState ?? "cold-lead")
+          setDoubleTouchMinutes(data.doubleTouchMinutes ?? 2)
+          setTiempoRespuestaLeadSeg(data.tiempoRespuestaLeadSeg ?? 15)
+        }
+      } catch (err) {
+        console.error("Failed to load guardian settings:", err)
+      } finally {
+        setGuardianLoaded(true)
+      }
+    }
+    loadGuardianSettings()
+  }, [token])
+
+  const handleSaveGuardian = async () => {
+    setIsSavingGuardian(true)
+    try {
+      if (!token) return
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/settings/guardian`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          slaMinutes,
+          criticalState,
+          doubleTouchMinutes,
+          tiempoRespuestaLeadSeg,
+        }),
+      })
+      if (!res.ok) throw new Error("Failed to save")
+      toast.success("Configuracion guardada exitosamente")
+    } catch (err) {
+      console.error("Failed to save guardian settings:", err)
+      toast.error("Error al guardar la configuracion")
+    } finally {
+      setIsSavingGuardian(false)
+    }
+  }
 
   return (
     <motion.div
@@ -416,6 +471,10 @@ export function DashboardPage() {
                 onCriticalStateChange={setCriticalState}
                 doubleTouchMinutes={doubleTouchMinutes}
                 onDoubleTouchChange={setDoubleTouchMinutes}
+                tiempoRespuestaLeadSeg={tiempoRespuestaLeadSeg}
+                onTiempoRespuestaChange={setTiempoRespuestaLeadSeg}
+                onSave={handleSaveGuardian}
+                isSaving={isSavingGuardian}
               />
             </ReportGroup>
 

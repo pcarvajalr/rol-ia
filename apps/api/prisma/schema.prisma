@@ -101,6 +101,9 @@ model LeadTracking {
   fuente        String
   fechaCreacion DateTime @default(now()) @map("fecha_creacion")
   idEstado      Int?     @map("id_estado")
+  telefono      String?  @map("telefono")
+  email         String?  @map("email")
+  flowJobId     String?  @map("flow_job_id")
 
   tenant  Tenant            @relation(fields: [tenantId], references: [id])
   estado  CatEstadoGestion? @relation(fields: [idEstado], references: [id])

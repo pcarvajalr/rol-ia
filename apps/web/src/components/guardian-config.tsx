@@ -5,7 +5,8 @@ import { Slider } from "@/components/ui/slider"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Settings2, User, Phone, CheckCircle2 } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Settings2, User, Phone, CheckCircle2, Loader2 } from "lucide-react"
 
 interface GuardianConfigProps {
   slaMinutes: number
@@ -14,6 +15,10 @@ interface GuardianConfigProps {
   onCriticalStateChange: (value: string) => void
   doubleTouchMinutes: number
   onDoubleTouchChange: (value: number) => void
+  tiempoRespuestaLeadSeg: number
+  onTiempoRespuestaChange: (value: number) => void
+  onSave: () => void
+  isSaving: boolean
 }
 
 export function GuardianConfig({
@@ -23,6 +28,10 @@ export function GuardianConfig({
   onCriticalStateChange,
   doubleTouchMinutes,
   onDoubleTouchChange,
+  tiempoRespuestaLeadSeg,
+  onTiempoRespuestaChange,
+  onSave,
+  isSaving,
 }: GuardianConfigProps) {
   return (
     <Card className="border-aura/20 bg-card">
@@ -35,6 +44,34 @@ export function GuardianConfig({
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
+        {/* Tiempo de Respuesta del Lead */}
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <Label className="text-foreground text-sm font-medium">
+              Tiempo de Respuesta del Lead
+            </Label>
+            <Badge
+              variant="outline"
+              className="border-aura/30 text-aura font-mono text-xs"
+            >
+              {tiempoRespuestaLeadSeg} seg
+            </Badge>
+          </div>
+          <Slider
+            value={[tiempoRespuestaLeadSeg]}
+            onValueChange={(v) => onTiempoRespuestaChange(v[0])}
+            min={15}
+            max={300}
+            step={5}
+            className="[&_[data-slot=slider-range]]:bg-aura [&_[data-slot=slider-thumb]]:border-aura"
+          />
+          <p className="text-muted-foreground text-xs">
+            Tiempo en segundos que el sistema espera antes de gestionar
+            automaticamente un lead nuevo. Si el asesor no atiende dentro de
+            este tiempo, Rol.IA inicia el contacto automatico.
+          </p>
+        </div>
+
         {/* SLA de Respuesta Humana */}
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
@@ -150,6 +187,22 @@ export function GuardianConfig({
             </motion.div>
           </div>
         </div>
+
+        {/* Guardar */}
+        <Button
+          onClick={onSave}
+          disabled={isSaving}
+          className="bg-aura hover:bg-aura/90 w-full"
+        >
+          {isSaving ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Guardando...
+            </>
+          ) : (
+            "Guardar Configuracion"
+          )}
+        </Button>
       </CardContent>
     </Card>
   )

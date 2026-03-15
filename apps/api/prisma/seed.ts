@@ -230,6 +230,31 @@ async function main() {
         { label: "Token de Integracion API", fieldKey: "api_token", fieldType: "secret", sortOrder: 1 },
       ],
     },
+    {
+      name: "Envío Emails",
+      slug: "email",
+      icon: "Mail",
+      category: "email",
+      sortOrder: 5,
+      fields: [
+        { label: "Servidor SMTP", fieldKey: "smtp_host", fieldType: "text", sortOrder: 1 },
+        { label: "Puerto SMTP", fieldKey: "smtp_port", fieldType: "text", sortOrder: 2 },
+        { label: "Usuario SMTP", fieldKey: "smtp_user", fieldType: "text", sortOrder: 3 },
+        { label: "Contraseña SMTP", fieldKey: "smtp_password", fieldType: "secret", sortOrder: 4 },
+        { label: "Email de Envío", fieldKey: "from_email", fieldType: "text", sortOrder: 5 },
+        { label: "Nombre de Envío", fieldKey: "from_name", fieldType: "text", sortOrder: 6 },
+      ],
+    },
+    {
+      name: "Google Calendar",
+      slug: "google_calendar",
+      icon: "Calendar",
+      category: "scheduling",
+      sortOrder: 6,
+      fields: [
+        { label: "URL de Calendario (iCal)", fieldKey: "calendar_url", fieldType: "text", sortOrder: 1 },
+      ],
+    },
   ];
 
   for (const p of platforms) {
@@ -246,7 +271,7 @@ async function main() {
       });
     }
   }
-  console.log("  IntegrationPlatforms: 4 platforms with fields");
+  console.log("  IntegrationPlatforms: 6 platforms with fields");
 
   // ---- LeadTracking (6 leads matching abandonment component) ----
   const now = new Date();

@@ -7,6 +7,7 @@ import { authRoutes } from "./routes/auth"
 import { adminRoutes } from "./routes/admin"
 import { intelRoutes } from "./routes/intel"
 import { vaultRoutes } from "./routes/vault"
+import { settingsRoutes } from "./routes/settings"
 import { tenantMiddleware, type TenantUser } from "./middleware/tenant"
 import { superadminMiddleware } from "./middleware/superadmin"
 import type { AuthUser } from "./middleware/auth"
@@ -40,6 +41,7 @@ api.get("/me", (c) => {
 
 api.route("/intel", intelRoutes)
 api.route("/vault", vaultRoutes)
+api.route("/settings", settingsRoutes)
 
 // Admin routes (auth + tenant + superadmin)
 const adminApi = new Hono<{
