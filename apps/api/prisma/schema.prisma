@@ -95,8 +95,9 @@ model CatEstadoGestion {
 // === LEADS ===
 
 model LeadTracking {
-  leadId        String   @id @map("lead_id")
+  leadId        String   @id @default(uuid()) @map("lead_id")
   tenantId      String   @map("tenant_id") @db.Uuid
+  externalId    String?  @map("external_id")
   nombreLead    String   @map("nombre_lead")
   fuente        String
   fechaCreacion DateTime @default(now()) @map("fecha_creacion")
@@ -110,6 +111,7 @@ model LeadTracking {
   eventos LeadEventHistory[]
   citas   CitaAgendada[]
 
+  @@unique([tenantId, externalId, fuente])
   @@index([tenantId])
   @@index([tenantId, fechaCreacion])
   @@map("leads_tracking")

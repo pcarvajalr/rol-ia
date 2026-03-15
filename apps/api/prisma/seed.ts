@@ -143,6 +143,7 @@ async function main() {
     "WhatsApp",
     "Email",
     "Cita",
+    "Timeout",
   ];
 
   const tipoEventoRecords: { id: number; nombre: string }[] = [];
@@ -277,34 +278,34 @@ async function main() {
   const now = new Date();
 
   const leadData = [
-    { leadId: "L-001", nombre: "Carlos Peresss", fuente: "Meta", minAgo: 12 },
-    { leadId: "L-002", nombre: "Ana Gomez", fuente: "Google", minAgo: 9 },
-    { leadId: "L-003", nombre: "Luis Torres", fuente: "Meta", minAgo: 7 },
-    { leadId: "L-004", nombre: "Maria Lopez", fuente: "Google", minAgo: 5 },
-    { leadId: "L-005", nombre: "Juan Ruiz", fuente: "Organico", minAgo: 3 },
-    { leadId: "L-006", nombre: "Sofia Diaz", fuente: "Meta", minAgo: 1 },
+    { externalId: "CL-1001", nombre: "Carlos Peresss", fuente: "Meta", minAgo: 12 },
+    { externalId: "CL-1002", nombre: "Ana Gomez", fuente: "Google", minAgo: 9 },
+    { externalId: "CL-1003", nombre: "Luis Torres", fuente: "Meta", minAgo: 7 },
+    { externalId: "CL-1004", nombre: "Maria Lopez", fuente: "Google", minAgo: 5 },
+    { externalId: "CL-1005", nombre: "Juan Ruiz", fuente: "Organico", minAgo: 3 },
+    { externalId: "CL-1006", nombre: "Sofia Diaz", fuente: "Meta", minAgo: 1 },
   ];
 
-  const leadIds: string[] = [];
+  const createdLeads: { leadId: string; externalId: string; minAgo: number }[] = [];
 
   for (const l of leadData) {
-    leadIds.push(l.leadId);
     const fechaCreacion = new Date(now.getTime() - l.minAgo * 60 * 1000);
-    await prisma.leadTracking.create({
+    const lead = await prisma.leadTracking.create({
       data: {
-        leadId: l.leadId,
         tenantId,
+        externalId: l.externalId,
         nombreLead: l.nombre,
         fuente: l.fuente,
         fechaCreacion,
         idEstado: estadoRecords[0].id,
       },
     });
+    createdLeads.push({ leadId: lead.leadId, externalId: l.externalId, minAgo: l.minAgo });
   }
   console.log("  LeadTracking: 6 records");
 
   // ---- LeadEventHistory (~12: 2 events per lead for KPI calc) ----
-  for (const l of leadData) {
+  for (const l of createdLeads) {
     const leadCreation = new Date(now.getTime() - l.minAgo * 60 * 1000);
 
     // IA event: quick response (3-10 min after creation)
@@ -340,11 +341,11 @@ async function main() {
   // ---- CitaAgendada (5 matching scheduling component) ----
   // Use relative timestamps: appointments spread across the next few hours from now
   const citasData = [
-    { lead: "L-001", offsetMin: 30, canal: "Telefono" },
-    { lead: "L-002", offsetMin: 60, canal: "WhatsApp" },
-    { lead: "L-003", offsetMin: 105, canal: "Telefono" },
-    { lead: "L-004", offsetMin: 180, canal: "Telefono" },
-    { lead: "L-005", offsetMin: 270, canal: "WhatsApp" },
+    { leadIndex: 0, offsetMin: 30, canal: "Telefono" },
+    { leadIndex: 1, offsetMin: 60, canal: "WhatsApp" },
+    { leadIndex: 2, offsetMin: 105, canal: "Telefono" },
+    { leadIndex: 3, offsetMin: 180, canal: "Telefono" },
+    { leadIndex: 4, offsetMin: 270, canal: "WhatsApp" },
   ];
 
   for (const c of citasData) {
@@ -353,7 +354,7 @@ async function main() {
       data: {
         idCita: randomUUID(),
         tenantId,
-        leadId: c.lead,
+        leadId: createdLeads[c.leadIndex].leadId,
         horaAgenda,
         canal: c.canal,
         idGoogleCalendar: `gcal_${randomUUID().slice(0, 8)}`,

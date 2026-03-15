@@ -17,8 +17,8 @@ de leads desde CRMs/redes sociales, iniciando con Clientify.
 ### Campos de `leads_tracking`
 | Campo | Uso |
 |-------|-----|
-| `lead_id` (PK) | UUID autogenerado. Identificador único interno del sistema. |
-| `external_id` | ID del contacto en el CRM/plataforma origen (ej: `"12345"` de Clientify). **REQUIERE MIGRACIÓN**. |
+| `lead_id` (PK) | UUID autogenerado (`@default(uuid())`). Identificador único interno del sistema. **YA MIGRADO**. |
+| `external_id` | ID del contacto en el CRM/plataforma origen (ej: `"12345"` de Clientify). **YA MIGRADO**. |
 | `nombre_lead` | `first_name + last_name` del payload de Clientify |
 | `fuente` | `contact_source` del payload de Clientify. Identifica qué plataforma/CRM es origen. |
 | `telefono` | `phone` del payload de Clientify. Necesario para WhatsApp. |
@@ -26,7 +26,7 @@ de leads desde CRMs/redes sociales, iniciando con Clientify.
 | `id_estado` | FK a `cat_estados_gestion`. Estado comercial del lead (Nuevo, Contactado, etc.). Se busca por nombre, NO por ID hardcodeado. |
 | `flow_job_id` | ID del Cloud Task activo. Para cancelar el timer al terminar flujo. |
 
-**Constraint de idempotencia** (requiere migración): `@@unique([tenantId, externalId, fuente])` — un mismo contacto de la misma fuente para el mismo tenant no se duplica.
+**Constraint de idempotencia** (ya migrado): `@@unique([tenantId, externalId, fuente])` — un mismo contacto de la misma fuente para el mismo tenant no se duplica.
 
 ### Tipos de evento (`cat_tipos_evento`)
 | ID | Nombre | Uso |
@@ -36,7 +36,7 @@ de leads desde CRMs/redes sociales, iniciando con Clientify.
 | 3 | WhatsApp | Se envió mensaje WhatsApp |
 | 4 | Email | Se envió email |
 | 5 | Cita | Se agendó cita |
-| 6 | Timeout | Flujo expiró por TTL (12h). **AGREGAR al seed.** |
+| 6 | Timeout | Flujo expiró por TTL (12h). **YA EN SEED.** |
 
 ### Máquina de estados del flujo (via `leads_event_history`)
 El estado del flujo automatizado NO se guarda en un campo de `leads_tracking`. Se **deriva del último evento** registrado en `leads_event_history` para ese lead. Esto mantiene trazabilidad completa y evita inconsistencias.
@@ -69,7 +69,7 @@ Lead ingreso → (timer vence) → consulta_estado → WhatsApp enviado → (tim
 - Crear Módulo de VAPI si existe
 - Crear Sistema de colas/timers con Google Cloud Tasks — ver sección 6.
 - ~~Crear módulo de envío de emails~~ → **YA IMPLEMENTADO** en `apps/api/src/modules/email.ts`. Usa credenciales SMTP de la bóveda por tenant (slug `email`). Funciones: `sendEmail(tenantId, options)`, `sendEmailToOwner(tenantId, subject, html)`, `validateSmtpCredentials(tenantId)`.
-- **Migración pendiente**: agregar campo `external_id` a `leads_tracking`, agregar tipo "Timeout" a `cat_tipos_evento`, cambiar `lead_id` a UUID autogenerado.
+- ~~Migración pendiente~~ → **YA MIGRADO**: `lead_id` es UUID autogenerado, campo `external_id` agregado, constraint `@@unique([tenantId, externalId, fuente])` aplicado, tipo "Timeout" agregado al seed.
 
 ### 1. Webhook principal orquestador
    - Crear endpoint `POST /webhook/:plataforma/:idEmpresa`
@@ -195,7 +195,7 @@ Lead ingreso → (timer vence) → consulta_estado → WhatsApp enviado → (tim
 
 ## Restricciones
 - Solo implementar integración/módulo con Clientify en esta fase.
-- Respetar la estructura de tablas existente; se agregaron campos `telefono`, `email`, `flow_job_id` a `leads_tracking` via migración. Pendiente: agregar `external_id` y constraint unique.
+- Respetar la estructura de tablas existente; se agregaron campos `telefono`, `email`, `flow_job_id`, `external_id` a `leads_tracking` via migración. Constraint `@@unique([tenantId, externalId, fuente])` aplicado. `lead_id` es UUID autogenerado.
 - Toda credencial debe gestionarse exclusivamente desde la bóveda de seguridad existente.
 - El webhook debe ser extensible para futuras plataformas sin refactorización mayor, crear nuevos módulos en `apps/api/src/modules/`.
 - No hardcodear tiempos, credenciales, ni IDs de estados. Tiempo de respuesta se lee de `tenant.settings.guardian.tiempoRespuestaLeadSeg`. Estados se buscan por nombre en `cat_estados_gestion`.
