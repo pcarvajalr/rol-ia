@@ -195,18 +195,41 @@ vaultRouter.put("/integrations/:slug", async (c) => {
     return c.json({ error: "Plataforma no encontrada" }, 404)
   }
 
-  // Validate required fields
-  for (const field of platform.fields) {
-    if (field.required && (!credentials[field.fieldKey] || !credentials[field.fieldKey].trim())) {
-      return c.json({ error: `El campo "${field.label}" es requerido` }, 400)
+  // Load existing credentials if integration already exists
+  let existingCredentials: Record<string, string> = {}
+  const existingIntegration = await prisma.tenantIntegration.findUnique({
+    where: { tenantId_platformId: { tenantId, platformId: platform.id } },
+  })
+  if (existingIntegration) {
+    try {
+      existingCredentials = JSON.parse(
+        decrypt(existingIntegration.credentialsEncrypted, existingIntegration.iv)
+      )
+    } catch {
+      // If decryption fails, treat as empty
     }
   }
 
-  // Only keep known field keys
+  // Validate required fields (masked values count as present if we have existing data)
+  const isMasked = (val: string) => typeof val === "string" && val.startsWith("••••")
+  for (const field of platform.fields) {
+    const val = credentials[field.fieldKey]
+    if (field.required && (!val || (!val.trim() && !isMasked(val)))) {
+      // Allow masked values only if we have the real value stored
+      if (!existingCredentials[field.fieldKey]) {
+        return c.json({ error: `El campo "${field.label}" es requerido` }, 400)
+      }
+    }
+  }
+
+  // Only keep known field keys — preserve existing value when field is masked
   const cleanCredentials: Record<string, string> = {}
   for (const field of platform.fields) {
-    if (credentials[field.fieldKey]) {
-      cleanCredentials[field.fieldKey] = credentials[field.fieldKey]
+    const val = credentials[field.fieldKey]
+    if (val && isMasked(val) && existingCredentials[field.fieldKey]) {
+      cleanCredentials[field.fieldKey] = existingCredentials[field.fieldKey]
+    } else if (val) {
+      cleanCredentials[field.fieldKey] = val
     }
   }
 
