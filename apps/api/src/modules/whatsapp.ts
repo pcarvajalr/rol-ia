@@ -11,10 +11,15 @@ interface TemplateComponent {
   index?: string
 }
 
+interface TemplateInfo {
+  components: TemplateComponent[]
+  language: string
+}
+
 export async function getTemplateStructure(
   tenantId: string,
   templateName: string
-): Promise<TemplateComponent[]> {
+): Promise<TemplateInfo> {
   const credentials = await validateCredentials(tenantId, "whatsapp", ["account_id", "access_token"])
 
   const response = await fetch(
@@ -28,21 +33,24 @@ export async function getTemplateStructure(
   }
 
   const data = (await response.json()) as {
-    data: Array<{ components: TemplateComponent[] }>
+    data: Array<{ components: TemplateComponent[]; language: string }>
   }
 
   if (!data.data?.length) {
     throw new Error(`Template "${templateName}" no encontrado`)
   }
 
-  return data.data[0].components
+  return {
+    components: data.data[0].components,
+    language: data.data[0].language,
+  }
 }
 
 export async function sendTemplate(
   tenantId: string,
   to: string,
   templateName: string,
-  languageCode: string,
+  _languageCode: string,
   params: Record<string, string>
 ): Promise<void> {
   const credentials = await validateCredentials(tenantId, "whatsapp", [
@@ -50,8 +58,10 @@ export async function sendTemplate(
     "access_token",
   ])
 
-  // Obtener estructura del template
-  const templateComponents = await getTemplateStructure(tenantId, templateName)
+  // Obtener estructura y idioma real del template
+  const templateInfo = await getTemplateStructure(tenantId, templateName)
+  const templateComponents = templateInfo.components
+  const languageCode = templateInfo.language
 
   // Construir components con parámetros
   const components: TemplateComponent[] = []
