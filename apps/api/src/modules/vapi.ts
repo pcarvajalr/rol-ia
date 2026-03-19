@@ -23,10 +23,11 @@ export async function makeOutboundCall(
     }),
   })
 
+  const responseBody = await response.text()
+
   if (!response.ok) {
-    const error = await response.text()
-    throw new Error(`Error VAPI call: ${response.status} - ${error}`)
+    throw new Error(`Error VAPI call: ${response.status} - ${responseBody}`)
   }
 
-  console.log(`[vapi] Outbound call initiated to ${phoneNumber} for tenant ${tenantId}`)
+  console.log(`[vapi] Outbound call initiated to ${phoneNumber} for tenant ${tenantId}. Response:`, responseBody)
 }

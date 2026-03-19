@@ -261,13 +261,17 @@ export async function handleButtonResponse(
     return
   }
 
-  switch (buttonId) {
+  // Normalizar: Meta envía el texto del botón como ID en templates Quick Reply
+  const normalizedId = buttonId.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "_")
+
+  switch (normalizedId) {
     case "llamar_ahora":
       await handleLlamarAhora(leadId, tenantId, lead)
       break
     case "agendar_cita":
       await handleAgendarCita(leadId, tenantId, lead)
       break
+    case "no_contestar":
     case "no_contactar":
       await handleNoContactar(leadId, tenantId, lead)
       break

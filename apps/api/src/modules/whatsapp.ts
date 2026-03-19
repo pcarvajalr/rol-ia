@@ -58,6 +58,8 @@ export async function sendTemplate(
     "access_token",
   ])
 
+  console.log(`[whatsapp] Usando phone_number_id: ${credentials.phone_number_id} para tenant ${tenantId}`)
+
   // Obtener estructura y idioma real del template
   const templateInfo = await getTemplateStructure(tenantId, templateName)
   const templateComponents = templateInfo.components
@@ -191,6 +193,7 @@ export function parseWebhookPayload(body: unknown): MetaWebhookResult | null {
               type?: string
               button_reply?: { id?: string; title?: string }
             }
+            button?: { payload?: string; text?: string }
             text?: { body?: string }
           }>
         }
@@ -216,6 +219,10 @@ export function parseWebhookPayload(body: unknown): MetaWebhookResult | null {
   if (message.type === "interactive" && message.interactive?.type === "button_reply") {
     result.type = "button_reply"
     result.buttonId = message.interactive.button_reply?.id
+  } else if (message.type === "button" && message.button) {
+    // Botones de template Quick Reply — Meta envía payload/text en vez de interactive
+    result.type = "button_reply"
+    result.buttonId = message.button.payload || message.button.text
   } else if (message.type === "text") {
     result.type = "text"
   }

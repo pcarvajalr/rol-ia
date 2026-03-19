@@ -125,7 +125,7 @@ Webhook Clientify → crear lead + evento "Lead ingreso" → Cloud Task (timer 1
 ```
 
 ### Archivos clave
-- `routes/webhook.ts` — endpoints de webhook (Clientify + Meta). Procesamiento sync (no usar setImmediate — Cloud Run corta ejecución post-response)
+- `routes/webhook.ts` — endpoints de webhook (Clientify + Meta). Clientify responde 200 inmediato y procesa en background. Meta procesa sync.
 - `routes/internal.ts` — `POST /internal/lead-timeout/:leadId` y `POST /internal/lead-cleanup`
 - `modules/clientify.ts` — parseo payload y consulta API Clientify
 - `modules/whatsapp.ts` — Meta Cloud API (templates, texto, webhook parsing, firma)
@@ -141,7 +141,7 @@ Derivado del último evento en `leads_event_history`, NO de un campo. Consultar 
 `/webhook` y `/internal` se montan ANTES del middleware CORS en `index.ts` para permitir llamadas de servicios externos.
 
 ### Infraestructura GCP (producción)
-- **Cloud Run**: `rolia-api` en `southamerica-east1`
+- **Cloud Run**: `rolia-api` en `southamerica-east1`, con `--no-cpu-throttling` habilitado
 - **Cloud Tasks**: queue `rol-ia-leads` en `us-central1`, max 3 retries, 10s backoff
 - **Variables de entorno**: `GCP_PROJECT_ID`, `GCP_LOCATION`, `GCP_QUEUE_NAME`, `API_BASE_URL`, `META_VERIFY_TOKEN`
 - **Pendiente**: Cloud Scheduler job para cleanup cada hora:
@@ -162,17 +162,28 @@ Campos en bóveda (slug `whatsapp`): `phone_number`, `phone_number_id`, `account
 - **Para probar solo persistencia**: en local, enviar POST al webhook y verificar en BD que el lead y evento se crearon.
 
 ### Decisiones técnicas
-- **Sin setImmediate en Cloud Run**: el procesamiento del webhook es sync porque Cloud Run apaga instancias tras enviar la respuesta HTTP
+- **Webhook Clientify responde 200 inmediato**: parsea body y logea payload, luego responde 200. Todo el procesamiento (validar tenant, credenciales, crear lead, startFlow) corre en background via fire-and-forget promise. Requiere `--no-cpu-throttling` en Cloud Run para que el trabajo async no se muera tras la respuesta.
+- **Cloud Run con `--no-cpu-throttling`**: habilitado para permitir procesamiento async post-response. Sin esto, Cloud Run throttlea CPU tras enviar la respuesta HTTP.
 - **Cloud Tasks client con lazy init**: se instancia al primer uso, no al importar, para evitar crash sin credenciales GCP en desarrollo local
 - **Solo Cloud Tasks**: sin adapter in-memory para desarrollo local
+- **Botones de template WhatsApp**: Meta envía `type: "button"` con `button.payload`/`button.text` (NO `type: "interactive"` con `button_reply`). El parser en `whatsapp.ts` soporta ambos formatos.
+- **Normalización de IDs de botón**: los botones Quick Reply de templates envían el texto como ID (ej: `"Agendar Cita"`). `handleButtonResponse` normaliza a snake_case sin acentos para hacer match (ej: `"agendar_cita"`).
+- **Búsqueda de lead por teléfono en webhook Meta**: busca el lead con `flowJobId` no nulo más reciente, para evitar matchear leads viejos cuando hay múltiples leads con el mismo teléfono.
 
 ## Autenticación de webhooks entrantes
 
 Cada plataforma que envía datos via webhook usa su propio mecanismo de autenticación. La validación siempre ocurre en `webhook.ts` (la ruta), nunca en el módulo de la plataforma.
 
 ### Mecanismos actuales
-- **Clientify**: header `Authorization: Token {api_token}` — se valida contra el `api_token` de la bóveda (slug `clientify`)
-- **Meta/WhatsApp**: `verify_token` para verificación (GET) + firma de payload (POST) — rutas separadas en `webhook.ts`
+- **Clientify**: header `Authorization: Token {api_token}` — se valida contra el `api_token` de la bóveda (slug `clientify`). La validación ocurre en background (post-200).
+- **Meta/WhatsApp**: `verify_token` para verificación (GET). Firma `X-Hub-Signature-256` en POST actualmente **deshabilitada temporalmente** (TODO: restaurar). Rutas separadas en `webhook.ts`.
+
+### Configuración del webhook Meta (por WABA)
+Cada WhatsApp Business Account (WABA) debe tener la app suscrita para recibir webhooks:
+1. `POST /{WABA_ID}/subscribed_apps` — suscribir la app
+2. `POST /{WABA_ID}/subscribed_apps` con `override_callback_uri` y `verify_token` — apuntar al endpoint
+3. El campo `messages` debe estar suscrito
+4. Si la app de Meta está en modo desarrollo, solo envía webhooks a números en la lista de testers
 
 ### Agregar una plataforma nueva
 1. Crear el módulo en `apps/api/src/modules/{plataforma}.ts` — solo parseo de payload y lógica de negocio, sin auth
@@ -213,6 +224,12 @@ Cada plataforma que envía datos via webhook usa su propio mecanismo de autentic
 - Requiere campos `defaultCountry` y `defaultLanguage` en el modelo Tenant
 - Actualmente `sendTemplate` usa el idioma del template existente en Meta; este plan agrega soporte para múltiples traducciones del mismo template
 - Plan detallado: `docs/plans/multi-language-templates.md`
+
+### Restaurar validación de firma Meta
+- La validación de `X-Hub-Signature-256` en `POST /webhook/meta` está comentada temporalmente
+- Restaurar cuando se confirme que los webhooks de Meta funcionan establemente
+- Código comentado en `webhook.ts` con marcador `TODO: Restaurar validación de firma`
+- Requiere `app_secret` correcto en la bóveda (slug `whatsapp`) del tenant
 
 ### Observabilidad y logging estructurado
 - Implementar logging estructurado con correlación por `leadId`, `tenantId`, y paso del flujo
