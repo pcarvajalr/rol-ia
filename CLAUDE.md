@@ -94,12 +94,18 @@ VITE_API_URL=             # URL del API (local: http://localhost:3001)
 - Modelos principales: Tenant, User, ConfigGuardian, LeadTracking, MetricsAdPerformance, VentasProyeccion
 - Auth flow: Firebase Auth → registro en DB → aprobación por admin → acceso
 
-## Seed y datos de desarrollo
+## Seed y datos de desarrollo — PELIGRO
 
-- **Ejecutar**: `pnpm --filter api db:seed` (corre `tsx prisma/seed.ts`)
+- **NUNCA ejecutar el seed en la BD de desarrollo/producción**: el seed es DESTRUCTIVO — borra y recrea TODOS los datos del tenant demo. Esto incluye leads, eventos, credenciales de bóveda, configuraciones y cualquier dato real.
+- **El seed solo se usa para inicializar una BD completamente vacía** (primer setup o reset total intencional).
+- **Para insertar datos de catálogo** (nuevos estados, tipos de evento, etc.), usar migraciones SQL:
+  ```bash
+  cd apps/api && pnpm prisma migrate dev --create-only --name descripcion-del-cambio
+  ```
+  Esto crea el archivo de migración vacío en `prisma/migrations/`. Editar el `.sql` generado y agregar los INSERT. Luego aplicar con `pnpm prisma migrate dev`.
+- **Para modificar estructura de tablas**, usar migraciones normales de Prisma (modificar `schema.prisma` y ejecutar `pnpm prisma migrate dev`).
 - **Usuario demo**: `admin@rol.ia` / `Admin123!` (superadmin)
 - **Tenant demo**: `75c003f2-d881-4343-8637-0477db03fbc1` ("Rol Demo", plan pro)
-- **Idempotente**: el seed borra y recrea todos los datos del tenant demo. Cualquier cambio manual en ese tenant se pierde al re-ejecutar
 - **Timestamps relativos**: `MetricsAdPerformance` y `CitaAgendada` usan offsets desde `now` para que siempre caigan dentro de las ventanas de consulta de los endpoints
 - **Datos reales**: todos los componentes del dashboard consultan PostgreSQL via Prisma (no hay datos mockeados en frontend). Los endpoints filtran por tiempo (`>= now - 5h`, `>= startOfDay`), por lo que el seed debe re-ejecutarse si los datos quedan fuera de rango
 
