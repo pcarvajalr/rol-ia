@@ -34,6 +34,8 @@ model Tenant {
   contentHooks       IaContentHook[]
   roasHistory        MetricsRoasHistory[]
   ventasProyecciones VentasProyeccion[]
+  crmStateMappings   CrmStateMapping[]
+  webhookRequestLogs WebhookRequestLog[]
 
   @@map("tenants")
 }
@@ -87,7 +89,8 @@ model CatEstadoGestion {
   nombre String
   color  String?
 
-  leads LeadTracking[]
+  leads            LeadTracking[]
+  crmStateMappings CrmStateMapping[]
 
   @@map("cat_estados_gestion")
 }
@@ -104,12 +107,16 @@ model LeadTracking {
   idEstado      Int?     @map("id_estado")
   telefono      String?  @map("telefono")
   email         String?  @map("email")
-  flowJobId     String?  @map("flow_job_id")
+  flowJobId        String?  @map("flow_job_id")
+  crmStatusInicial String?  @map("crm_status_inicial")
+  semaphoreTimeMs  BigInt?  @map("semaphore_time_ms")
+  semaphoreColor   String?  @map("semaphore_color")
 
-  tenant  Tenant            @relation(fields: [tenantId], references: [id])
-  estado  CatEstadoGestion? @relation(fields: [idEstado], references: [id])
-  eventos LeadEventHistory[]
-  citas   CitaAgendada[]
+  tenant      Tenant             @relation(fields: [tenantId], references: [id])
+  estado      CatEstadoGestion?  @relation(fields: [idEstado], references: [id])
+  eventos     LeadEventHistory[]
+  citas       CitaAgendada[]
+  webhookLogs WebhookRequestLog[]
 
   @@unique([tenantId, externalId, fuente])
   @@index([tenantId])
@@ -133,6 +140,40 @@ model LeadEventHistory {
   @@index([tenantId])
   @@index([leadId])
   @@map("leads_event_history")
+}
+
+model CrmStateMapping {
+  id                 Int              @id @default(autoincrement())
+  tenantId           String           @map("tenant_id") @db.Uuid
+  platformSlug       String           @map("platform_slug")
+  crmStatus          String           @map("crm_status")
+  catEstadoGestionId Int              @map("cat_estado_gestion_id")
+
+  tenant        Tenant            @relation(fields: [tenantId], references: [id])
+  estadoGestion CatEstadoGestion  @relation(fields: [catEstadoGestionId], references: [id])
+
+  @@unique([tenantId, platformSlug, crmStatus])
+  @@index([tenantId])
+  @@map("crm_state_mapping")
+}
+
+model WebhookRequestLog {
+  id         String   @id @default(uuid())
+  tenantId   String   @map("tenant_id") @db.Uuid
+  source     String
+  externalId String?  @map("external_id")
+  crmStatus  String?  @map("crm_status")
+  leadId     String?  @map("lead_id")
+  action     String
+  payload    Json?
+  timestamp  DateTime @default(now())
+
+  tenant Tenant        @relation(fields: [tenantId], references: [id])
+  lead   LeadTracking? @relation(fields: [leadId], references: [leadId], onDelete: SetNull)
+
+  @@index([tenantId, timestamp])
+  @@index([tenantId, externalId])
+  @@map("webhook_request_log")
 }
 
 model CitaAgendada {

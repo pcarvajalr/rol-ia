@@ -8,6 +8,8 @@ import { validateCredentials } from "../utils/encryption"
 
 const GUARDIAN_DEFAULTS = {
   tiempoRespuestaLeadSeg: 15,
+  tiempoVerdeMins: 5,
+  tiempoAmarilloMins: 5,
 }
 
 async function getTiempoRespuesta(tenantId: string): Promise<number> {
@@ -19,6 +21,31 @@ async function getTiempoRespuesta(tenantId: string): Promise<number> {
   const settings = tenant?.settings as Record<string, unknown> | null
   const guardian = settings?.guardian as Record<string, unknown> | null
   return (guardian?.tiempoRespuestaLeadSeg as number) || GUARDIAN_DEFAULTS.tiempoRespuestaLeadSeg
+}
+
+async function getGuardianSettings(tenantId: string) {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { settings: true },
+  })
+  const settings = tenant?.settings as Record<string, unknown> | null
+  const guardian = settings?.guardian as Record<string, unknown> | null
+  return {
+    tiempoVerdeMins: (guardian?.tiempoVerdeMins as number) || GUARDIAN_DEFAULTS.tiempoVerdeMins,
+    tiempoAmarilloMins: (guardian?.tiempoAmarilloMins as number) || GUARDIAN_DEFAULTS.tiempoAmarilloMins,
+  }
+}
+
+function calculateSemaphoreColor(
+  timeMs: number,
+  tiempoVerdeMins: number,
+  tiempoAmarilloMins: number
+): string {
+  const verdeMs = tiempoVerdeMins * 60000
+  const amarilloMs = tiempoAmarilloMins * 60000
+  if (timeMs <= verdeMs) return "verde"
+  if (timeMs <= verdeMs + amarilloMs) return "amarillo"
+  return "rojo"
 }
 
 export async function getLastEvent(leadId: string, tenantId: string) {
@@ -93,7 +120,7 @@ export async function handleTimeout(leadId: string, tenantId: string): Promise<v
       })
     }
 
-    await endFlow(tenantId, leadId)
+    await stopFlowWithSemaphore(tenantId, leadId)
   }
 }
 
@@ -165,7 +192,7 @@ async function handleFirstTimeout(
         `<p>El lead <strong>${lead.nombreLead}</strong> tiene un número de WhatsApp inválido: ${lead.telefono}</p>`
       )
 
-      await endFlow(tenantId, leadId)
+      await stopFlowWithSemaphore(tenantId, leadId)
       return
     }
 
@@ -189,7 +216,7 @@ async function handleFirstTimeout(
           })
         }
         await sendEmailToOwner(tenantId, "Número de WhatsApp inválido", `<p>El lead <strong>${lead.nombreLead}</strong> tiene un número de WhatsApp inválido: ${lead.telefono}</p>`)
-        await endFlow(tenantId, leadId)
+        await stopFlowWithSemaphore(tenantId, leadId)
         return
       }
       console.error(`[lead-flow] WhatsApp text also failed for lead ${leadId}:`, textErr.message)
@@ -307,7 +334,7 @@ async function handleLlamarAhora(
     })
   }
 
-  await endFlow(tenantId, leadId)
+  await stopFlowWithSemaphore(tenantId, leadId)
 }
 
 async function handleAgendarCita(
@@ -352,7 +379,7 @@ async function handleAgendarCita(
     })
   }
 
-  await endFlow(tenantId, leadId)
+  await stopFlowWithSemaphore(tenantId, leadId)
 }
 
 async function handleNoContactar(
@@ -387,7 +414,7 @@ async function handleNoContactar(
     })
   }
 
-  await endFlow(tenantId, leadId)
+  await stopFlowWithSemaphore(tenantId, leadId)
 }
 
 async function handleCredentialError(
@@ -414,6 +441,29 @@ async function handleCredentialError(
     `Error de credenciales de ${platform}`,
     `<p>Error de credenciales de <strong>${platform}</strong> al intentar contactar al lead <strong>${nombreLead}</strong>.</p><p>Verifique la configuración en la bóveda de seguridad.</p>`
   )
+
+  await stopFlowWithSemaphore(tenantId, leadId)
+}
+
+export async function stopFlowWithSemaphore(tenantId: string, leadId: string): Promise<void> {
+  const lead = await prisma.leadTracking.findUnique({
+    where: { leadId },
+    select: { fechaCreacion: true, flowJobId: true },
+  })
+
+  if (!lead) return
+
+  const timeMs = Date.now() - lead.fechaCreacion.getTime()
+  const { tiempoVerdeMins, tiempoAmarilloMins } = await getGuardianSettings(tenantId)
+  const color = calculateSemaphoreColor(timeMs, tiempoVerdeMins, tiempoAmarilloMins)
+
+  await prisma.leadTracking.update({
+    where: { leadId },
+    data: {
+      semaphoreTimeMs: BigInt(timeMs),
+      semaphoreColor: color,
+    },
+  })
 
   await endFlow(tenantId, leadId)
 }

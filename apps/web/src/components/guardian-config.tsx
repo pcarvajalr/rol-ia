@@ -17,6 +17,10 @@ interface GuardianConfigProps {
   onDoubleTouchChange: (value: number) => void
   tiempoRespuestaLeadSeg: number
   onTiempoRespuestaChange: (value: number) => void
+  tiempoVerdeMins: number
+  onTiempoVerdeChange: (v: number) => void
+  tiempoAmarilloMins: number
+  onTiempoAmarilloChange: (v: number) => void
   onSave: () => void
   isSaving: boolean
 }
@@ -30,6 +34,10 @@ export function GuardianConfig({
   onDoubleTouchChange,
   tiempoRespuestaLeadSeg,
   onTiempoRespuestaChange,
+  tiempoVerdeMins,
+  onTiempoVerdeChange,
+  tiempoAmarilloMins,
+  onTiempoAmarilloChange,
   onSave,
   isSaving,
 }: GuardianConfigProps) {
@@ -139,6 +147,48 @@ export function GuardianConfig({
             Minutos de espera entre el mensaje de texto automatico y la llamada
             de voz.
           </p>
+        </div>
+
+        {/* Semaforo de Abandono */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-semibold text-foreground">Semaforo de Abandono</h3>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm">Verde (OK)</Label>
+              <span className="text-sm font-mono text-muted-foreground">{tiempoVerdeMins} min</span>
+            </div>
+            <Slider
+              value={[tiempoVerdeMins]}
+              onValueChange={([v]) => onTiempoVerdeChange(v)}
+              min={1}
+              max={30}
+              step={1}
+            />
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm">Amarillo (En riesgo)</Label>
+              <span className="text-sm font-mono text-muted-foreground">
+                {tiempoAmarilloMins} min ({tiempoVerdeMins + tiempoAmarilloMins} min max)
+              </span>
+            </div>
+            <Slider
+              value={[tiempoAmarilloMins]}
+              onValueChange={([v]) => onTiempoAmarilloChange(v)}
+              min={1}
+              max={30}
+              step={1}
+            />
+          </div>
+
+          <div className="flex items-center justify-between rounded-md bg-muted/50 px-3 py-2">
+            <span className="text-sm text-muted-foreground">Rojo (Critico)</span>
+            <span className="text-sm font-mono text-alert">
+              &gt; {tiempoVerdeMins + tiempoAmarilloMins} min
+            </span>
+          </div>
         </div>
 
         {/* Mapeo de Datos */}

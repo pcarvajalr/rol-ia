@@ -103,27 +103,61 @@ intel.get("/cpa-realtime", async (c) => {
 // GET /intel/abandonment
 intel.get("/abandonment", async (c) => {
   const tenantId = c.get("tenantId")
-  if (!tenantId) return c.json({ leads: [] })
+  if (!tenantId) return c.json({ leads: [], thresholds: { tiempoVerdeMins: 5, tiempoAmarilloMins: 5 } })
 
   const db = createTenantClient(tenantId)
   const now = new Date()
+  const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000)
 
-  // Leads without recent events (candidates for abandonment)
-  const leads = await db.leadTracking.findMany({
-    include: { eventos: { orderBy: { timestamp: "desc" }, take: 1 } },
-    take: 6,
+  // Load tenant guardian settings for thresholds
+  const tenant = await db.tenant.findUnique({
+    where: { id: tenantId },
+    select: { settings: true },
+  })
+  const settings = tenant?.settings as Record<string, unknown> | null
+  const guardian = settings?.guardian as Record<string, unknown> | null
+  const tiempoVerdeMins = (guardian?.tiempoVerdeMins as number) || 5
+  const tiempoAmarilloMins = (guardian?.tiempoAmarilloMins as number) || 5
+
+  // Active leads (flow in progress)
+  const activeLeads = await db.leadTracking.findMany({
+    where: { tenantId, flowJobId: { not: null } },
     orderBy: { fechaCreacion: "desc" },
+    take: 10,
   })
 
-  const result = leads.map((l) => ({
+  // Recently completed leads with semaphore data (last 24h)
+  const completedLeads = await db.leadTracking.findMany({
+    where: {
+      tenantId,
+      flowJobId: null,
+      semaphoreTimeMs: { not: null },
+      fechaCreacion: { gte: twentyFourHoursAgo },
+    },
+    orderBy: { fechaCreacion: "desc" },
+    take: 6,
+  })
+
+  const mapLead = (l: typeof activeLeads[0], isActive: boolean) => ({
     id: l.leadId,
     name: l.nombreLead,
     source: l.fuente,
-    waitMs: now.getTime() - l.fechaCreacion.getTime(),
-    maxMs: 900000,
-  }))
+    waitMs: isActive ? now.getTime() - l.fechaCreacion.getTime() : 0,
+    isFlowActive: isActive,
+    semaphoreTimeMs: l.semaphoreTimeMs ? Number(l.semaphoreTimeMs) : null,
+    semaphoreColor: l.semaphoreColor,
+    crmStatusInicial: l.crmStatusInicial,
+  })
 
-  return c.json({ leads: result })
+  const leads = [
+    ...activeLeads.map((l) => mapLead(l, true)),
+    ...completedLeads.map((l) => mapLead(l, false)),
+  ]
+
+  return c.json({
+    thresholds: { tiempoVerdeMins, tiempoAmarilloMins },
+    leads,
+  })
 })
 
 // GET /intel/optimizer

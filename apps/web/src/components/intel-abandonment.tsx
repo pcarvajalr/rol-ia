@@ -15,25 +15,52 @@ interface Lead {
   name: string
   source: string
   waitMs: number
-  maxMs: number
+  isFlowActive: boolean
+  semaphoreTimeMs: number | null
+  semaphoreColor: string | null
+  crmStatusInicial: string | null
+}
+
+interface Thresholds {
+  tiempoVerdeMins: number
+  tiempoAmarilloMins: number
 }
 
 interface AbandonmentData {
   leads: Lead[]
+  thresholds: Thresholds
 }
 
-function getStatus(ms: number): { label: string; color: string; bg: string; border: string } {
-  const min = ms / 60000
-  if (min > 10) return { label: "Critico", color: "text-alert", bg: "bg-alert", border: "border-alert/20" }
-  if (min > 5) return { label: "En riesgo", color: "text-warning", bg: "bg-warning", border: "border-warning/20" }
+function getStatus(
+  ms: number,
+  thresholds: Thresholds
+): { label: string; color: string; bg: string; border: string } {
+  const verdeMs = thresholds.tiempoVerdeMins * 60000
+  const amarilloMs = thresholds.tiempoAmarilloMins * 60000
+  if (ms > verdeMs + amarilloMs)
+    return { label: "Critico", color: "text-alert", bg: "bg-alert", border: "border-alert/20" }
+  if (ms > verdeMs)
+    return { label: "En riesgo", color: "text-warning", bg: "bg-warning", border: "border-warning/20" }
   return { label: "OK", color: "text-rescue", bg: "bg-rescue", border: "border-rescue/20" }
 }
 
-function formatAgony(ms: number) {
-  const totalSec = Math.floor(ms / 1000)
-  const m = Math.floor(totalSec / 60)
-  const s = totalSec % 60
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+function formatTime(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000)
+  const totalMinutes = Math.floor(totalSeconds / 60)
+  const totalHours = Math.floor(totalMinutes / 60)
+  const totalDays = Math.floor(totalHours / 24)
+
+  if (totalDays >= 1) {
+    const remainingHours = totalHours - totalDays * 24
+    return `${totalDays}d ${remainingHours}h`
+  }
+  if (totalHours >= 1) {
+    const remainingMinutes = totalMinutes - totalHours * 60
+    return `${totalHours}h ${remainingMinutes}m`
+  }
+  const minutes = totalMinutes
+  const seconds = totalSeconds - minutes * 60
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
 }
 
 export function IntelAbandonment() {
@@ -41,6 +68,7 @@ export function IntelAbandonment() {
   const [guardianActive, setGuardianActive] = useState(false)
   const [leads, setLeads] = useState<Lead[]>([])
   const [loading, setLoading] = useState(true)
+  const [thresholds, setThresholds] = useState<Thresholds>({ tiempoVerdeMins: 5, tiempoAmarilloMins: 5 })
 
   // Fetch con polling cada 15s — aislado del hook compartido
   const fetchLeads = useCallback(async () => {
@@ -51,8 +79,11 @@ export function IntelAbandonment() {
       })
       if (!res.ok) return
       const json = (await res.json()) as AbandonmentData
+      if (json.thresholds) setThresholds(json.thresholds)
       if (json.leads.length > 0) {
         setLeads(json.leads)
+      } else {
+        setLeads([])
       }
       setLoading(false)
     } catch {
@@ -71,21 +102,28 @@ export function IntelAbandonment() {
     if (leads.length === 0) return
     const id = setInterval(() => {
       setLeads((prev) =>
-        prev.map((l) => ({
-          ...l,
-          waitMs: Math.min(l.waitMs + 1000, l.maxMs),
-        }))
+        prev.map((l) =>
+          l.isFlowActive
+            ? { ...l, waitMs: l.waitMs + 1000 }
+            : l
+        )
       )
     }, 1000)
     return () => clearInterval(id)
-  }, [leads.length > 0])
+  }, [leads.length])
 
   if (loading) return <Skeleton className="h-[400px] rounded-xl" />
   if (leads.length === 0) return <IntelEmptyState />
 
   const sorted = [...leads].sort((a, b) => b.waitMs - a.waitMs)
-  const critical = sorted.filter((l) => l.waitMs / 60000 > 10).length
-  const atRisk = sorted.filter((l) => { const m = l.waitMs / 60000; return m > 5 && m <= 10 }).length
+  const verdeMs = thresholds.tiempoVerdeMins * 60000
+  const rojoMs = (thresholds.tiempoVerdeMins + thresholds.tiempoAmarilloMins) * 60000
+  const getDisplayMs = (l: Lead) => l.isFlowActive ? l.waitMs : (l.semaphoreTimeMs || 0)
+  const critical = sorted.filter((l) => getDisplayMs(l) > rojoMs).length
+  const atRisk = sorted.filter((l) => {
+    const ms = getDisplayMs(l)
+    return ms > verdeMs && ms <= rojoMs
+  }).length
 
   return (
     <Card className="border-border/50 bg-card">
@@ -129,11 +167,11 @@ export function IntelAbandonment() {
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-1.5">
             <span className="bg-alert h-2.5 w-2.5 rounded-full" />
-            <span className="text-muted-foreground text-[11px]">{">"} 10 min</span>
+            <span className="text-muted-foreground text-[11px]">{`> ${thresholds.tiempoVerdeMins + thresholds.tiempoAmarilloMins} min`}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="bg-warning h-2.5 w-2.5 rounded-full" />
-            <span className="text-muted-foreground text-[11px]">{">"} 5 min</span>
+            <span className="text-muted-foreground text-[11px]">{`> ${thresholds.tiempoVerdeMins} min`}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="bg-rescue h-2.5 w-2.5 rounded-full" />
@@ -152,8 +190,10 @@ export function IntelAbandonment() {
           </div>
           <AnimatePresence>
             {sorted.map((lead) => {
-              const status = getStatus(lead.waitMs)
-              const pct = Math.min((lead.waitMs / lead.maxMs) * 100, 100)
+              const displayMs = lead.isFlowActive ? lead.waitMs : (lead.semaphoreTimeMs || 0)
+              const status = getStatus(displayMs, thresholds)
+              const redThresholdMs = (thresholds.tiempoVerdeMins + thresholds.tiempoAmarilloMins) * 60000
+              const pct = Math.min((displayMs / redThresholdMs) * 100, 100)
               return (
                 <motion.div
                   key={lead.id}
@@ -175,7 +215,7 @@ export function IntelAbandonment() {
                   </Badge>
                   <div className={`flex items-center justify-end gap-1 font-mono text-xs ${status.color}`}>
                     <Clock className="h-3 w-3" />
-                    {formatAgony(lead.waitMs)}
+                    {formatTime(displayMs)}
                   </div>
                   <div className="flex items-center justify-end">
                     <div className="bg-secondary h-1.5 w-full overflow-hidden rounded-full">

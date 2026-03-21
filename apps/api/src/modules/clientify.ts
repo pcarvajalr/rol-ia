@@ -23,6 +23,7 @@ interface NormalizedLead {
   fuente: string
   telefono: string | null
   email: string | null
+  status: string | null
 }
 
 export function parseClientifyPayload(body: unknown): NormalizedLead {
@@ -41,6 +42,7 @@ export function parseClientifyPayload(body: unknown): NormalizedLead {
     fuente: payload.contact_source || "Clientify",
     telefono: payload.phones?.[0]?.phone || null,
     email: payload.emails?.[0]?.email || null,
+    status: payload.status || null,
   }
 }
 

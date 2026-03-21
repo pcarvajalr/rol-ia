@@ -1,6 +1,6 @@
 import { Hono } from "hono"
 import { prisma } from "../db/client"
-import { getLastEvent, endFlow, handleTimeout } from "../services/lead-flow"
+import { getLastEvent, stopFlowWithSemaphore, handleTimeout } from "../services/lead-flow"
 
 const internalRouter = new Hono()
 
@@ -81,7 +81,7 @@ internalRouter.post("/lead-cleanup", async (c) => {
         },
       })
 
-      await endFlow(lead.tenantId, lead.leadId)
+      await stopFlowWithSemaphore(lead.tenantId, lead.leadId)
       cleaned++
       console.log(`[internal] Lead ${lead.leadId} (${lead.nombreLead}) marked as timeout`)
     }

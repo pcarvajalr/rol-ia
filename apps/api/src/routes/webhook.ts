@@ -3,7 +3,7 @@ import { prisma } from "../db/client"
 import { validateCredentials } from "../utils/encryption"
 import { parseClientifyPayload } from "../modules/clientify"
 import { sendEmailToOwner } from "../modules/email"
-import { startFlow, handleButtonResponse } from "../services/lead-flow"
+import { startFlow, handleButtonResponse, stopFlowWithSemaphore } from "../services/lead-flow"
 import {
   parseWebhookPayload,
   findTenantByPhoneNumberId,
@@ -78,6 +78,32 @@ function processWebhookInBackground(
   })
 }
 
+async function logWebhookRequest(data: {
+  tenantId: string
+  source: string
+  externalId: string | null
+  crmStatus: string | null
+  leadId: string | null
+  action: string
+  payload: unknown
+}) {
+  try {
+    await prisma.webhookRequestLog.create({
+      data: {
+        tenantId: data.tenantId,
+        source: data.source,
+        externalId: data.externalId,
+        crmStatus: data.crmStatus,
+        leadId: data.leadId,
+        action: data.action,
+        payload: data.payload as any,
+      },
+    })
+  } catch (err) {
+    console.error("[webhook-log] Error saving webhook log:", err)
+  }
+}
+
 async function handleClientifyWebhook(tenantId: string, body: unknown) {
   // Parsear payload
   const lead = parseClientifyPayload(body)
@@ -92,32 +118,116 @@ async function handleClientifyWebhook(tenantId: string, body: unknown) {
     return
   }
 
-  // Verificar idempotencia
+  // Verificar si ya existe un lead con este externalId
   const existingLead = await prisma.leadTracking.findFirst({
-    where: {
-      tenantId,
-      externalId: lead.externalId,
-      fuente: lead.fuente,
-    },
+    where: { tenantId, externalId: lead.externalId, fuente: lead.fuente },
   })
 
   if (existingLead) {
-    const lastEvent = await prisma.leadEventHistory.findFirst({
-      where: { leadId: existingLead.leadId, tenantId },
-      orderBy: { timestamp: "desc" },
-      include: { tipoEvento: true },
-    })
+    const incomingStatus = lead.status?.toLowerCase() || null
 
-    const completedEvents = ["Llamada", "Cita", "Timeout"]
-    const isCompleted =
-      (lastEvent && lastEvent.tipoEvento && completedEvents.includes(lastEvent.tipoEvento.nombre)) ||
-      lastEvent?.descripcion?.includes("No contactar")
-
-    if (isCompleted) {
-      console.log(`[webhook] Lead ${lead.externalId} ya completado, ignorando`)
-    } else {
-      console.log(`[webhook] Lead ${lead.externalId} con flujo activo, ignorando`)
+    // Lead already completed (no active flow) — just log and skip
+    if (!existingLead.flowJobId) {
+      await logWebhookRequest({
+        tenantId,
+        source: "clientify",
+        externalId: lead.externalId,
+        crmStatus: incomingStatus,
+        leadId: existingLead.leadId,
+        action: "ignored_completed",
+        payload: body,
+      })
+      return
     }
+
+    // TODO: Detect Clientify delete event
+    // Candidates: hook?.event === "contact.deleted" or similar
+    // NOTE: When enabling, review if parseClientifyPayload can handle delete-event payloads
+    const isDeleteEvent = false
+    if (isDeleteEvent) {
+      const estadoEliminado = await prisma.catEstadoGestion.findFirst({
+        where: { nombre: "Eliminado" },
+      })
+      if (estadoEliminado) {
+        await prisma.leadTracking.update({
+          where: { leadId: existingLead.leadId },
+          data: { idEstado: estadoEliminado.id },
+        })
+      }
+      await stopFlowWithSemaphore(tenantId, existingLead.leadId)
+      await logWebhookRequest({
+        tenantId,
+        source: "clientify",
+        externalId: lead.externalId,
+        crmStatus: incomingStatus,
+        leadId: existingLead.leadId,
+        action: "deleted",
+        payload: body,
+      })
+      return
+    }
+
+    // Same status as initial — ignore, semaphore keeps counting
+    // Handles null-null case: if both are null, treat as same (ignored)
+    const isSameStatus =
+      (incomingStatus === null && existingLead.crmStatusInicial === null) ||
+      (incomingStatus !== null &&
+        existingLead.crmStatusInicial !== null &&
+        incomingStatus === existingLead.crmStatusInicial.toLowerCase())
+
+    if (isSameStatus) {
+      await logWebhookRequest({
+        tenantId,
+        source: "clientify",
+        externalId: lead.externalId,
+        crmStatus: incomingStatus,
+        leadId: existingLead.leadId,
+        action: "ignored",
+        payload: body,
+      })
+      return
+    }
+
+    // Status changed — stop flow, map state
+    await stopFlowWithSemaphore(tenantId, existingLead.leadId)
+
+    // Look up CRM state mapping
+    let newEstadoId: number | null = null
+    if (incomingStatus) {
+      const mapping = await prisma.crmStateMapping.findFirst({
+        where: { tenantId, platformSlug: "clientify", crmStatus: incomingStatus },
+      })
+      if (mapping) {
+        newEstadoId = mapping.catEstadoGestionId
+      } else {
+        // Fallback to "En proceso"
+        const enProceso = await prisma.catEstadoGestion.findFirst({
+          where: { nombre: "En proceso" },
+        })
+        if (enProceso) {
+          newEstadoId = enProceso.id
+        } else {
+          console.error("[webhook] Fallback state 'En proceso' not found in CatEstadoGestion")
+        }
+      }
+    }
+
+    if (newEstadoId) {
+      await prisma.leadTracking.update({
+        where: { leadId: existingLead.leadId },
+        data: { idEstado: newEstadoId },
+      })
+    }
+
+    await logWebhookRequest({
+      tenantId,
+      source: "clientify",
+      externalId: lead.externalId,
+      crmStatus: incomingStatus,
+      leadId: existingLead.leadId,
+      action: "status_changed",
+      payload: body,
+    })
     return
   }
 
@@ -141,7 +251,18 @@ async function handleClientifyWebhook(tenantId: string, body: unknown) {
       telefono: lead.telefono,
       email: lead.email,
       idEstado: estadoNuevo.id,
+      crmStatusInicial: lead.status?.toLowerCase() || null,
     },
+  })
+
+  await logWebhookRequest({
+    tenantId,
+    source: "clientify",
+    externalId: lead.externalId,
+    crmStatus: lead.status || null,
+    leadId: newLead.leadId,
+    action: "created",
+    payload: body,
   })
 
   // Registrar evento "Lead ingreso"

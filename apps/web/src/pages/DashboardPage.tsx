@@ -29,6 +29,7 @@ import { ROASGuardian } from "@/components/roas-guardian"
 import { RescueHistory } from "@/components/rescue-history"
 import { ActivityFeed } from "@/components/activity-feed"
 import { GuardianConfig } from "@/components/guardian-config"
+import { CrmStateMapping } from "@/components/crm-state-mapping"
 import { SecurityVault } from "@/components/security-vault"
 import { HelpPanel } from "@/components/help-panel"
 import { RolLogo, RolIcon } from "@/components/rol-logo"
@@ -149,6 +150,8 @@ export function DashboardPage() {
   const [criticalState, setCriticalState] = useState("cold-lead")
   const [doubleTouchMinutes, setDoubleTouchMinutes] = useState(2)
   const [tiempoRespuestaLeadSeg, setTiempoRespuestaLeadSeg] = useState(15)
+  const [tiempoVerdeMins, setTiempoVerdeMins] = useState(5)
+  const [tiempoAmarilloMins, setTiempoAmarilloMins] = useState(5)
   const [isSavingGuardian, setIsSavingGuardian] = useState(false)
   const [guardianLoaded, setGuardianLoaded] = useState(false)
 
@@ -165,6 +168,8 @@ export function DashboardPage() {
           setCriticalState(data.criticalState ?? "cold-lead")
           setDoubleTouchMinutes(data.doubleTouchMinutes ?? 2)
           setTiempoRespuestaLeadSeg(data.tiempoRespuestaLeadSeg ?? 15)
+          if (data.tiempoVerdeMins) setTiempoVerdeMins(data.tiempoVerdeMins)
+          if (data.tiempoAmarilloMins) setTiempoAmarilloMins(data.tiempoAmarilloMins)
         }
       } catch (err) {
         console.error("Failed to load guardian settings:", err)
@@ -190,6 +195,8 @@ export function DashboardPage() {
           criticalState,
           doubleTouchMinutes,
           tiempoRespuestaLeadSeg,
+          tiempoVerdeMins,
+          tiempoAmarilloMins,
         }),
       })
       if (!res.ok) throw new Error("Failed to save")
@@ -473,6 +480,10 @@ export function DashboardPage() {
                 onDoubleTouchChange={setDoubleTouchMinutes}
                 tiempoRespuestaLeadSeg={tiempoRespuestaLeadSeg}
                 onTiempoRespuestaChange={setTiempoRespuestaLeadSeg}
+                tiempoVerdeMins={tiempoVerdeMins}
+                onTiempoVerdeChange={setTiempoVerdeMins}
+                tiempoAmarilloMins={tiempoAmarilloMins}
+                onTiempoAmarilloChange={setTiempoAmarilloMins}
                 onSave={handleSaveGuardian}
                 isSaving={isSavingGuardian}
               />
@@ -490,6 +501,20 @@ export function DashboardPage() {
               defaultOpen={false}
             >
               <SecurityVault />
+            </ReportGroup>
+
+            <ReportGroup
+              icon={<Settings className="text-info h-4 w-4" />}
+              iconColor="text-info"
+              iconBg="bg-info/10"
+              title="Mapeo de Estados CRM"
+              subtitle="Traduce estados del CRM a estados internos de la app"
+              badge="Integraciones"
+              badgeColor="border-info/30 text-info"
+              count={1}
+              defaultOpen={false}
+            >
+              <CrmStateMapping token={token ?? ""} />
             </ReportGroup>
           </TabsContent>
         </Tabs>
