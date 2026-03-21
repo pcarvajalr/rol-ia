@@ -150,13 +150,25 @@ export function GuardianConfig({
         </div>
 
         {/* Semaforo de Abandono */}
-        <div className="space-y-4">
-          <h3 className="text-sm font-semibold text-foreground">Semaforo de Abandono</h3>
+        <div className="border-border/50 rounded-lg border p-4 space-y-4">
+          <div className="flex items-center gap-2">
+            <div className="flex gap-1">
+              <span className="bg-rescue h-2.5 w-2.5 rounded-full" />
+              <span className="bg-warning h-2.5 w-2.5 rounded-full" />
+              <span className="bg-alert h-2.5 w-2.5 rounded-full" />
+            </div>
+            <h3 className="text-sm font-semibold text-foreground">Semaforo de Abandono</h3>
+          </div>
 
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <Label className="text-sm">Verde (OK)</Label>
-              <span className="text-sm font-mono text-muted-foreground">{tiempoVerdeMins} min</span>
+              <div className="flex items-center gap-2">
+                <span className="bg-rescue h-2 w-2 rounded-full" />
+                <Label className="text-sm">Verde (OK)</Label>
+              </div>
+              <Badge variant="outline" className="border-rescue/30 text-rescue font-mono text-xs">
+                {tiempoVerdeMins} min
+              </Badge>
             </div>
             <Slider
               value={[tiempoVerdeMins]}
@@ -164,15 +176,19 @@ export function GuardianConfig({
               min={1}
               max={30}
               step={1}
+              className="[&_[data-slot=slider-range]]:bg-rescue [&_[data-slot=slider-thumb]]:border-rescue"
             />
           </div>
 
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <Label className="text-sm">Amarillo (En riesgo)</Label>
-              <span className="text-sm font-mono text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <span className="bg-warning h-2 w-2 rounded-full" />
+                <Label className="text-sm">Amarillo (En riesgo)</Label>
+              </div>
+              <Badge variant="outline" className="border-warning/30 text-warning font-mono text-xs">
                 {tiempoAmarilloMins} min ({tiempoVerdeMins + tiempoAmarilloMins} min max)
-              </span>
+              </Badge>
             </div>
             <Slider
               value={[tiempoAmarilloMins]}
@@ -180,14 +196,18 @@ export function GuardianConfig({
               min={1}
               max={30}
               step={1}
+              className="[&_[data-slot=slider-range]]:bg-warning [&_[data-slot=slider-thumb]]:border-warning"
             />
           </div>
 
-          <div className="flex items-center justify-between rounded-md bg-muted/50 px-3 py-2">
-            <span className="text-sm text-muted-foreground">Rojo (Critico)</span>
-            <span className="text-sm font-mono text-alert">
+          <div className="flex items-center justify-between rounded-md bg-alert/5 border border-alert/20 px-3 py-2">
+            <div className="flex items-center gap-2">
+              <span className="bg-alert h-2 w-2 rounded-full" />
+              <span className="text-sm text-muted-foreground">Rojo (Critico)</span>
+            </div>
+            <Badge variant="outline" className="border-alert/30 text-alert font-mono text-xs">
               &gt; {tiempoVerdeMins + tiempoAmarilloMins} min
-            </span>
+            </Badge>
           </div>
         </div>
 

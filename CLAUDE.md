@@ -2,6 +2,10 @@
 
 Plataforma SaaS multi-tenant de inteligencia comercial para marketing digital. Monitorea leads, rendimiento de ads, diagnostica fugas de conversión y genera proyecciones de ventas.
 
+## Reglas de documentación
+
+- Cuando el usuario pida "documentar" algo, siempre hacerlo en este archivo (CLAUDE.md), no en archivos de memoria ni en otros docs.
+
 ## Stack
 
 - **Monorepo**: pnpm workspaces + Turborepo
@@ -242,3 +246,22 @@ Cada WhatsApp Business Account (WABA) debe tener la app suscrita para recibir we
 - Cada acción del flujo (webhook recibido, timer creado, WhatsApp enviado, VAPI llamado, etc.) debe emitir un log con contexto completo
 - Integración futura con Google Cloud Logging para dashboards de operación
 - Alertas cuando un tenant acumule más de N leads en estado de flujo activo sin resolver
+
+## Problemas conocidos en desarrollo local
+
+### Archivos .js fantasma en apps/web/src
+Vite resuelve `.js` con mayor prioridad que `.tsx`. Si existen archivos `.js` compilados viejos junto a los `.tsx` (ej: `guardian-config.js` al lado de `guardian-config.tsx`), Vite sirve la versión vieja sin los cambios nuevos. No genera error en consola — simplemente renderiza la versión vieja.
+
+**Síntoma:** cambios en archivos `.tsx` del frontend no se reflejan en el navegador, ni con cache clear, reinstall, ni incógnito.
+
+**Diagnóstico:**
+```bash
+find apps/web/src -name "*.js" -not -path "*/node_modules/*"
+```
+
+**Solución:**
+```bash
+find apps/web/src -name "*.js" -delete
+```
+
+Esto NO afecta producción (el build compila desde `.tsx`), solo el dev server local. Los `.js` están en `.gitignore` (`apps/web/src/**/*.js`) pero persisten en disco local.
