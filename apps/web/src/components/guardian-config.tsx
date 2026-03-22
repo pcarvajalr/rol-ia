@@ -80,7 +80,13 @@ export function GuardianConfig({
           </p>
         </div>
 
-        {/* SLA de Respuesta Humana */}
+        {/* --- CAMPO DISPONIBLE PARA USO FUTURO ---
+         * slaMinutes: Tiempo SLA de respuesta humana (1-30 min).
+         * Puede usarse para: escalamiento automatico, notificaciones al supervisor,
+         * metricas de cumplimiento SLA por asesor.
+         * El valor se persiste en tenant.settings.guardian.slaMinutes
+         */}
+        {/*
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <Label className="text-foreground text-sm font-medium">
@@ -105,24 +111,34 @@ export function GuardianConfig({
             Tiempo que Rol.IA espera antes de intervenir automaticamente.
           </p>
         </div>
+        */}
 
-        {/* Identificador de Estado Critico */}
+        {/* Estado CRM que indica "no atendido" — Gate pre-WhatsApp */}
         <div className="flex flex-col gap-2">
           <Label className="text-foreground text-sm font-medium">
-            Identificador de Estado Critico
+            Estado CRM No Atendido
           </Label>
           <Input
             value={criticalState}
             onChange={(e) => onCriticalStateChange(e.target.value)}
-            placeholder="cold-lead"
+            placeholder="Ej: new, cold-lead, sin-gestionar"
             className="border-border/50 bg-secondary/50 text-foreground font-mono text-sm focus-visible:border-aura focus-visible:ring-aura/30"
           />
           <p className="text-muted-foreground text-xs">
-            Estado del CRM que se considera &quot;No Atendido&quot;.
+            Estado del CRM que significa que el lead NO ha sido atendido.
+            Antes de enviar el WhatsApp automatico, G1 consulta el CRM:
+            si el estado cambio a uno diferente a este valor, significa que
+            un asesor ya lo atendio y el flujo se detiene automaticamente.
           </p>
         </div>
 
-        {/* Ventana de Doble Toque */}
+        {/* --- CAMPO DISPONIBLE PARA USO FUTURO ---
+         * doubleTouchMinutes: Ventana entre mensaje de texto y llamada de voz (1-10 min).
+         * Puede usarse para: separar el timing del WhatsApp y la llamada VAPI
+         * en vez de usar el mismo tiempoRespuestaLeadSeg para ambos timers.
+         * El valor se persiste en tenant.settings.guardian.doubleTouchMinutes
+         */}
+        {/*
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <Label className="text-foreground text-sm font-medium">
@@ -148,6 +164,7 @@ export function GuardianConfig({
             de voz.
           </p>
         </div>
+        */}
 
         {/* Semaforo de Abandono */}
         <div className="border-border/50 rounded-lg border p-4 space-y-4">

@@ -177,12 +177,14 @@ model WebhookRequestLog {
 }
 
 model CitaAgendada {
-  idCita           String   @id @default(uuid()) @map("id_cita")
-  tenantId         String   @map("tenant_id") @db.Uuid
-  leadId           String   @map("lead_id")
-  horaAgenda       DateTime @map("hora_agenda")
+  idCita           String    @id @default(uuid()) @map("id_cita")
+  tenantId         String    @map("tenant_id") @db.Uuid
+  leadId           String    @map("lead_id")
+  horaAgenda       DateTime? @map("hora_agenda")
   canal            String
-  idGoogleCalendar String?  @map("id_google_calendar")
+  estado           String    @default("pendiente")
+  idGoogleCalendar String?   @map("id_google_calendar")
+  creadoEn         DateTime  @default(now()) @map("creado_en")
 
   tenant Tenant       @relation(fields: [tenantId], references: [id])
   lead   LeadTracking @relation(fields: [leadId], references: [leadId])

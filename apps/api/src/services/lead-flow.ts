@@ -10,6 +10,7 @@ const GUARDIAN_DEFAULTS = {
   tiempoRespuestaLeadSeg: 15,
   tiempoVerdeMins: 5,
   tiempoAmarilloMins: 5,
+  criticalState: "", // vacio = gate desactivado
 }
 
 async function getTiempoRespuesta(tenantId: string): Promise<number> {
@@ -33,6 +34,7 @@ async function getGuardianSettings(tenantId: string) {
   return {
     tiempoVerdeMins: (guardian?.tiempoVerdeMins as number) || GUARDIAN_DEFAULTS.tiempoVerdeMins,
     tiempoAmarilloMins: (guardian?.tiempoAmarilloMins as number) || GUARDIAN_DEFAULTS.tiempoAmarilloMins,
+    criticalState: (guardian?.criticalState as string) || GUARDIAN_DEFAULTS.criticalState,
   }
 }
 
@@ -144,9 +146,19 @@ async function handleFirstTimeout(
             data: { idEstado: estado.id },
           })
         }
+
+        // Gate CRM: si el estado cambio (es diferente al criticalState configurado),
+        // el asesor ya atendio — detener flujo y registrar semaforo
+        const { criticalState } = await getGuardianSettings(tenantId)
+        if (criticalState && crmStatus.toLowerCase() !== criticalState.toLowerCase()) {
+          console.log(`[lead-flow] Gate CRM: lead ${leadId} estado="${crmStatus}" != criticalState="${criticalState}", deteniendo flujo`)
+          await stopFlowWithSemaphore(tenantId, leadId)
+          return
+        }
       }
     } catch (error) {
       console.error(`[lead-flow] Error consulting Clientify for lead ${leadId}:`, error)
+      // Si falla la consulta CRM, continuar con el flujo (no bloquear por error de red)
     }
   }
 
@@ -379,6 +391,19 @@ async function handleAgendarCita(
       },
     })
   }
+
+  // G7: Crear registro de cita agendada
+  // horaAgenda queda null — se actualizara cuando el lead confirme en el calendario
+  // estado = "pendiente" por default (campo en schema)
+  await prisma.citaAgendada.create({
+    data: {
+      tenantId,
+      leadId,
+      canal: "WhatsApp",
+    },
+  })
+
+  console.log(`[lead-flow] CitaAgendada created for lead ${leadId}`)
 
   await endFlow(tenantId, leadId)
 }

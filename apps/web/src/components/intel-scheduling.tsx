@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -30,30 +30,11 @@ const statusConfig = {
 export function IntelScheduling() {
   const { data: fetched, loading } = useIntelFetch<SchedulingData>("/api/intel/scheduling", { appointments: [] })
   const [guardianActive, setGuardianActive] = useState(true)
-  const [appointments, setAppointments] = useState<Appointment[]>([])
-
-  useEffect(() => {
-    if (fetched.appointments.length > 0) setAppointments(fetched.appointments)
-  }, [fetched.appointments])
-
-  useEffect(() => {
-    if (appointments.length === 0) return
-    const id = setInterval(() => {
-      setAppointments((prev) =>
-        prev.map((a) => {
-          if (a.status === "pendiente" && Math.random() > 0.85) {
-            return { ...a, status: "confirmada" as const }
-          }
-          return a
-        })
-      )
-    }, 5000)
-    return () => clearInterval(id)
-  }, [appointments.length > 0])
 
   if (loading) return <Skeleton className="h-[380px] rounded-xl" />
-  if (appointments.length === 0 && fetched.appointments.length === 0) return <IntelEmptyState />
+  if (fetched.appointments.length === 0) return <IntelEmptyState />
 
+  const appointments = fetched.appointments
   const confirmed = appointments.filter((a) => a.status === "confirmada").length
   const total = appointments.length
 

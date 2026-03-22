@@ -203,34 +203,29 @@ intel.get("/scheduling", async (c) => {
   if (!tenantId) return c.json({ appointments: [] })
 
   const db = createTenantClient(tenantId)
-  const now = new Date()
-  const startOfDay = new Date(now)
+  const startOfDay = new Date()
   startOfDay.setHours(0, 0, 0, 0)
 
   const citas = await db.citaAgendada.findMany({
-    where: { horaAgenda: { gte: startOfDay } },
+    where: { creadoEn: { gte: startOfDay } },
     include: { lead: true },
-    orderBy: { horaAgenda: "asc" },
+    orderBy: { creadoEn: "asc" },
   })
 
   const appointments = citas.map((cita) => {
-    const citaTime = cita.horaAgenda.getTime()
-    const diff = citaTime - now.getTime()
-    let status: string
-    if (diff < 0) status = "confirmada"
-    else if (diff < 30 * 60 * 1000) status = "en-curso"
-    else status = "pendiente"
-
-    const h = cita.horaAgenda.getHours()
-    const m = cita.horaAgenda.getMinutes()
-    const time = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`
+    let time = "--:--"
+    if (cita.horaAgenda) {
+      const h = cita.horaAgenda.getHours()
+      const m = cita.horaAgenda.getMinutes()
+      time = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`
+    }
 
     return {
       id: cita.idCita,
       lead: cita.lead.nombreLead,
       time,
       channel: cita.canal.toLowerCase().includes("whatsapp") ? "whatsapp" : "voz",
-      status,
+      status: cita.estado,
       agent: "Rol G7",
     }
   })

@@ -33,8 +33,6 @@ import {
 
 interface SLATrackerProps {
   demoMode: boolean
-  slaMinutes: number
-  doubleTouchMinutes: number
 }
 
 type Phase = "idle" | "human_window" | "ia_intervening" | "completed"
@@ -47,8 +45,6 @@ interface ActionStep {
 
 export function SLATracker({
   demoMode,
-  slaMinutes,
-  doubleTouchMinutes,
 }: SLATrackerProps) {
   const [phase, setPhase] = useState<Phase>("idle")
   const [elapsed, setElapsed] = useState(0)
@@ -62,6 +58,12 @@ export function SLATracker({
   const [sendSuccess, setSendSuccess] = useState(false)
   const startTimeRef = useRef<number>(0)
   const animFrameRef = useRef<number>(0)
+
+  // Valores fijos para la simulacion visual del timeline
+  // Para funcionalidad real, usar los campos slaMinutes y doubleTouchMinutes
+  // disponibles en tenant.settings.guardian (ver guardian-config.tsx)
+  const slaMinutes = 7
+  const doubleTouchMinutes = 2
 
   const slaTriggerMs = slaMinutes * 60 * 1000
   const doubleTouchMs = doubleTouchMinutes * 60 * 1000

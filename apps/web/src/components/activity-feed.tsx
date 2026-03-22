@@ -22,9 +22,7 @@ interface LogEntry {
   type: "webhook" | "alert" | "whatsapp" | "vapi" | "success" | "info" | "config"
 }
 
-interface ActivityFeedProps {
-  slaMinutes: number
-}
+// slaMinutes disponible en tenant.settings.guardian si se necesita en el futuro
 
 interface ActivityFeedData {
   logs: LogEntry[]
@@ -60,7 +58,7 @@ const dotColorMap = {
   config: "bg-aura",
 }
 
-export function ActivityFeed({ slaMinutes: _slaMinutes }: ActivityFeedProps) {
+export function ActivityFeed() {
   const { data, loading } = useIntelFetch<ActivityFeedData>("/api/intel/activity-feed", { logs: [] })
 
   if (loading) return <Skeleton className="h-[520px] rounded-xl" />

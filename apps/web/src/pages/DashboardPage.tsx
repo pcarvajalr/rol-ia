@@ -393,8 +393,6 @@ export function DashboardPage() {
                   <motion.div {...fadeIn(0)}>
                     <SLATracker
                       demoMode={false}
-                      slaMinutes={slaMinutes}
-                      doubleTouchMinutes={doubleTouchMinutes}
                     />
                   </motion.div>
                   <motion.div {...fadeIn(0.06)}>
@@ -403,7 +401,7 @@ export function DashboardPage() {
                 </div>
                 <aside>
                   <div className="sticky top-20">
-                    <ActivityFeed slaMinutes={slaMinutes} />
+                    <ActivityFeed />
                   </div>
                 </aside>
               </div>
