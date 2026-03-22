@@ -119,20 +119,31 @@ intel.get("/abandonment", async (c) => {
   const tiempoVerdeMins = (guardian?.tiempoVerdeMins as number) || 5
   const tiempoAmarilloMins = (guardian?.tiempoAmarilloMins as number) || 5
 
-  // Active leads (flow in progress)
+  // Exclude terminal states from semaphore
+  const excludedStates = await db.catEstadoGestion.findMany({
+    where: { nombre: { in: ["Cerrado", "Perdido", "Eliminado"] } },
+    select: { id: true },
+  })
+  const excludedIds = excludedStates.map((e) => e.id)
+
+  const stateFilter = excludedIds.length > 0
+    ? { OR: [{ idEstado: null }, { idEstado: { notIn: excludedIds } }] }
+    : {}
+
+  // Active in semaphore: semaphoreTimeMs is null (not yet stopped by CRM)
   const activeLeads = await db.leadTracking.findMany({
-    where: { tenantId, flowJobId: { not: null } },
+    where: { tenantId, semaphoreTimeMs: null, ...stateFilter },
     orderBy: { fechaCreacion: "desc" },
     take: 10,
   })
 
-  // Recently completed leads with semaphore data (last 24h)
+  // Completed in semaphore: semaphoreTimeMs set (stopped by CRM), last 24h
   const completedLeads = await db.leadTracking.findMany({
     where: {
       tenantId,
-      flowJobId: null,
       semaphoreTimeMs: { not: null },
       fechaCreacion: { gte: twentyFourHoursAgo },
+      ...stateFilter,
     },
     orderBy: { fechaCreacion: "desc" },
     take: 6,

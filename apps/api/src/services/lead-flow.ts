@@ -120,7 +120,8 @@ export async function handleTimeout(leadId: string, tenantId: string): Promise<v
       })
     }
 
-    await stopFlowWithSemaphore(tenantId, leadId)
+    // No detener semáforo — solo las acciones automáticas terminaron
+    // El lead sigue activo en el semáforo hasta que el CRM cambie el status
   }
 }
 
@@ -192,7 +193,7 @@ async function handleFirstTimeout(
         `<p>El lead <strong>${lead.nombreLead}</strong> tiene un número de WhatsApp inválido: ${lead.telefono}</p>`
       )
 
-      await stopFlowWithSemaphore(tenantId, leadId)
+      await endFlow(tenantId, leadId)
       return
     }
 
@@ -216,7 +217,7 @@ async function handleFirstTimeout(
           })
         }
         await sendEmailToOwner(tenantId, "Número de WhatsApp inválido", `<p>El lead <strong>${lead.nombreLead}</strong> tiene un número de WhatsApp inválido: ${lead.telefono}</p>`)
-        await stopFlowWithSemaphore(tenantId, leadId)
+        await endFlow(tenantId, leadId)
         return
       }
       console.error(`[lead-flow] WhatsApp text also failed for lead ${leadId}:`, textErr.message)
@@ -334,7 +335,7 @@ async function handleLlamarAhora(
     })
   }
 
-  await stopFlowWithSemaphore(tenantId, leadId)
+  await endFlow(tenantId, leadId)
 }
 
 async function handleAgendarCita(
@@ -379,7 +380,7 @@ async function handleAgendarCita(
     })
   }
 
-  await stopFlowWithSemaphore(tenantId, leadId)
+  await endFlow(tenantId, leadId)
 }
 
 async function handleNoContactar(
@@ -414,7 +415,7 @@ async function handleNoContactar(
     })
   }
 
-  await stopFlowWithSemaphore(tenantId, leadId)
+  await endFlow(tenantId, leadId)
 }
 
 async function handleCredentialError(
@@ -442,7 +443,7 @@ async function handleCredentialError(
     `<p>Error de credenciales de <strong>${platform}</strong> al intentar contactar al lead <strong>${nombreLead}</strong>.</p><p>Verifique la configuración en la bóveda de seguridad.</p>`
   )
 
-  await stopFlowWithSemaphore(tenantId, leadId)
+  await endFlow(tenantId, leadId)
 }
 
 export async function stopFlowWithSemaphore(tenantId: string, leadId: string): Promise<void> {

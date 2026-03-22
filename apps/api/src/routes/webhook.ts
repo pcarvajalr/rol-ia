@@ -126,8 +126,8 @@ async function handleClientifyWebhook(tenantId: string, body: unknown) {
   if (existingLead) {
     const incomingStatus = lead.status?.toLowerCase() || null
 
-    // Lead already completed (no active flow) — just log and skip
-    if (!existingLead.flowJobId) {
+    // Lead semaphore already stopped (by CRM status change) — just log and skip
+    if (existingLead.semaphoreTimeMs !== null) {
       await logWebhookRequest({
         tenantId,
         source: "clientify",
@@ -277,6 +277,27 @@ async function handleClientifyWebhook(tenantId: string, body: unknown) {
   })
 
   console.log(`[webhook] Lead creado: ${newLead.leadId} (${lead.nombreLead})`)
+
+  // Verificar si el status inicial del CRM está mapeado a un estado de la app
+  const incomingStatus = lead.status?.toLowerCase() || null
+  if (incomingStatus) {
+    const mapping = await prisma.crmStateMapping.findFirst({
+      where: { tenantId, platformSlug: "clientify", crmStatus: incomingStatus },
+    })
+    if (mapping) {
+      // Status mapeado: asignar estado mapeado, no iniciar flow, registrar semáforo inmediato
+      await prisma.leadTracking.update({
+        where: { leadId: newLead.leadId },
+        data: {
+          idEstado: mapping.catEstadoGestionId,
+          semaphoreTimeMs: BigInt(0),
+          semaphoreColor: "verde",
+        },
+      })
+      console.log(`[webhook] Lead ${newLead.leadId} ingresó con status mapeado "${incomingStatus}", sin flow`)
+      return
+    }
+  }
 
   // Si no tiene teléfono, no iniciar flujo automático
   if (!lead.telefono) {

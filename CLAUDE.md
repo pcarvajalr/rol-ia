@@ -235,6 +235,13 @@ Cada WhatsApp Business Account (WABA) debe tener la app suscrita para recibir we
 - Actualmente `sendTemplate` usa el idioma del template existente en Meta; este plan agrega soporte para múltiples traducciones del mismo template
 - Plan detallado: `docs/plans/multi-language-templates.md`
 
+### Activar detección de eliminación de leads desde Clientify
+- El guard `isDeleteEvent` en `webhook.ts` está en `false` — el código para manejar eliminación está escrito pero desactivado
+- Se requiere capturar el payload real que Clientify envía al eliminar un contacto (probablemente `hook.event === "contact.deleted"`)
+- Aún no hay acceso a Clientify para hacer la prueba
+- Cuando se tenga acceso: eliminar un contacto de prueba en Clientify, capturar el payload en los logs de Cloud Run, y activar el guard con la condición correcta
+- El lead debería pasar a estado "Eliminado" y el semáforo detenerse
+
 ### Restaurar validación de firma Meta
 - La validación de `X-Hub-Signature-256` en `POST /webhook/meta` está comentada temporalmente
 - Restaurar cuando se confirme que los webhooks de Meta funcionan establemente
