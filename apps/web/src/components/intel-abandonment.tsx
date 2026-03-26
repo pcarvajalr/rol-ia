@@ -19,6 +19,7 @@ interface Lead {
   semaphoreTimeMs: number | null
   semaphoreColor: string | null
   crmStatusInicial: string | null
+  estadoGestion: string | null
 }
 
 interface Thresholds {
@@ -61,6 +62,15 @@ function formatTime(ms: number): string {
   const minutes = totalMinutes
   const seconds = totalSeconds - minutes * 60
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
+}
+
+const ESTADO_COLORS: Record<string, string> = {
+  "Nuevo": "border-blue-400/50 text-blue-400",
+  "Contactado": "border-emerald-400/50 text-emerald-400",
+  "En negociación": "border-amber-400/50 text-amber-400",
+  "Cerrado": "border-violet-400/50 text-violet-400",
+  "Perdido": "border-rose-400/50 text-rose-400",
+  "Eliminado": "border-zinc-400/50 text-zinc-400",
 }
 
 export function IntelAbandonment() {
@@ -204,7 +214,9 @@ export function IntelAbandonment() {
                 >
                   <div className="flex flex-col">
                     <span className="text-foreground text-xs font-medium">{lead.name}</span>
-                    <span className="text-muted-foreground text-[10px]">{lead.id}</span>
+                    <Badge variant="outline" className={`mt-0.5 w-fit text-[10px] ${ESTADO_COLORS[lead.estadoGestion ?? ""] ?? "border-border/40 text-muted-foreground"}`}>
+                      {lead.estadoGestion ?? "Sin estado"}
+                    </Badge>
                   </div>
                   <span className="text-muted-foreground text-xs">{lead.source}</span>
                   <Badge

@@ -133,6 +133,7 @@ intel.get("/abandonment", async (c) => {
   // Active in semaphore: semaphoreTimeMs is null (not yet stopped by CRM)
   const activeLeads = await db.leadTracking.findMany({
     where: { tenantId, semaphoreTimeMs: null, ...stateFilter },
+    include: { estado: { select: { nombre: true } } },
     orderBy: { fechaCreacion: "desc" },
     take: 10,
   })
@@ -145,6 +146,7 @@ intel.get("/abandonment", async (c) => {
       fechaCreacion: { gte: twentyFourHoursAgo },
       ...stateFilter,
     },
+    include: { estado: { select: { nombre: true } } },
     orderBy: { fechaCreacion: "desc" },
     take: 6,
   })
@@ -158,6 +160,7 @@ intel.get("/abandonment", async (c) => {
     semaphoreTimeMs: l.semaphoreTimeMs ? Number(l.semaphoreTimeMs) : null,
     semaphoreColor: l.semaphoreColor,
     crmStatusInicial: l.crmStatusInicial,
+    estadoGestion: l.estado?.nombre ?? null,
   })
 
   const leads = [
