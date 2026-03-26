@@ -12,8 +12,10 @@ interface Appointment {
   id: string
   lead: string
   time: string
+  date: string
   channel: "voz" | "whatsapp"
   status: "confirmada" | "pendiente" | "en-curso"
+  notes: string
   agent: string
 }
 
@@ -92,8 +94,13 @@ export function IntelScheduling() {
                     <span className="text-foreground text-xs font-medium">{apt.lead}</span>
                     <div className="text-muted-foreground flex items-center gap-1 text-[10px]">
                       <Clock className="h-2.5 w-2.5" />
-                      {apt.time}
+                      {apt.date ? `${apt.date} · ${apt.time}` : apt.time}
                     </div>
+                    {apt.notes && (
+                      <span className="text-muted-foreground/70 mt-0.5 text-[9px] italic leading-tight line-clamp-1">
+                        {apt.notes}
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-1">
                     {apt.channel === "voz" ? (

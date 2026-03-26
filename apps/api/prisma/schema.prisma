@@ -184,6 +184,9 @@ model CitaAgendada {
   canal            String
   estado           String    @default("pendiente")
   idGoogleCalendar String?   @map("id_google_calendar")
+  reminderTaskId   String?   @map("reminder_task_id")
+  calcomBookingUid String?   @map("calcom_booking_uid")
+  notas            String?
   creadoEn         DateTime  @default(now()) @map("creado_en")
 
   tenant Tenant       @relation(fields: [tenantId], references: [id])

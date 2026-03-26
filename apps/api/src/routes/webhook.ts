@@ -3,6 +3,9 @@ import { prisma } from "../db/client"
 import { validateCredentials } from "../utils/encryption"
 import { parseClientifyPayload } from "../modules/clientify"
 import { sendEmailToOwner } from "../modules/email"
+import { parseCalcomWebhook, validateCalcomSignature } from "../modules/calcom"
+import { sendTextMessage } from "../modules/whatsapp"
+import { createTask, cancelTask } from "../services/task-scheduler"
 import { startFlow, handleButtonResponse, stopFlowWithSemaphore } from "../services/lead-flow"
 import {
   parseWebhookPayload,
@@ -11,6 +14,39 @@ import {
 } from "../modules/whatsapp"
 
 const webhookRouter = new Hono()
+
+// =============================================
+// CAL.COM WEBHOOK (debe ir ANTES de la ruta genérica /:plataforma/:idEmpresa)
+// =============================================
+
+// POST /webhook/calcom/:tenantId
+webhookRouter.post("/calcom/:tenantId", async (c) => {
+  const { tenantId } = c.req.param()
+  const rawBody = await c.req.text()
+
+  console.log(`[webhook] Cal.com raw body (${rawBody.length} chars):`, rawBody.substring(0, 500))
+
+  // Cal.com puede enviar ping vacío al configurar el webhook
+  if (!rawBody || rawBody.trim() === "") {
+    console.log(`[webhook] Cal.com: ping vacío para tenant ${tenantId}`)
+    return c.json({ ok: true })
+  }
+
+  let body: unknown
+  try {
+    body = JSON.parse(rawBody)
+  } catch {
+    console.error(`[webhook] Cal.com: JSON inválido para tenant ${tenantId}`)
+    return c.json({ error: "Invalid JSON" }, 400)
+  }
+
+  console.log(`[webhook] Cal.com recibido para tenant ${tenantId}`)
+
+  // Responder 200 inmediato, procesar en background
+  processCalcomInBackground(tenantId, rawBody, body, c.req.raw.headers)
+
+  return c.json({ ok: true })
+})
 
 // POST /webhook/:plataforma/:idEmpresa
 webhookRouter.post("/:plataforma/:idEmpresa", async (c) => {
@@ -394,5 +430,188 @@ webhookRouter.post("/meta", async (c) => {
 
   return c.json({ ok: true })
 })
+
+async function processCalcomInBackground(
+  tenantId: string,
+  rawBody: string,
+  body: unknown,
+  headers: Headers
+): Promise<void> {
+  try {
+    // 1. Verificar tenant
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { id: true, active: true },
+    })
+    if (!tenant || !tenant.active) {
+      console.error(`[webhook] Cal.com: tenant ${tenantId} no encontrado o inactivo`)
+      return
+    }
+
+    // 2. Validar firma
+    try {
+      const credentials = await validateCredentials(tenantId, "calcom", ["webhook_secret"])
+      const signature = headers.get("x-cal-signature-256") || ""
+      if (!validateCalcomSignature(rawBody, signature, credentials.webhook_secret)) {
+        console.error(`[webhook] Cal.com: firma inválida para tenant ${tenantId}`)
+        return
+      }
+    } catch {
+      console.error(`[webhook] Cal.com: credenciales no configuradas para tenant ${tenantId}`)
+      return
+    }
+
+    // 3. Parsear payload
+    const parsed = parseCalcomWebhook(body)
+    if (!parsed) {
+      console.error(`[webhook] Cal.com: payload no parseable`)
+      return
+    }
+
+    console.log(`[webhook] Cal.com event: ${parsed.triggerEvent}, uid: ${parsed.bookingUid}, phone: ${parsed.attendeePhone}`)
+
+    if (parsed.triggerEvent === "BOOKING_CREATED") {
+      await handleCalcomBookingCreated(tenantId, parsed)
+    } else if (parsed.triggerEvent === "BOOKING_CANCELLED") {
+      await handleCalcomBookingCancelled(tenantId, parsed)
+    }
+  } catch (error) {
+    console.error(`[webhook] Error procesando Cal.com para tenant ${tenantId}:`, error)
+  }
+}
+
+async function handleCalcomBookingCreated(
+  tenantId: string,
+  booking: ReturnType<typeof parseCalcomWebhook> & {}
+): Promise<void> {
+  if (!booking.attendeePhone) {
+    console.error(`[webhook] Cal.com booking sin teléfono, uid: ${booking.bookingUid}`)
+    return
+  }
+
+  const phoneVariants = [
+    booking.attendeePhone,
+    booking.attendeePhone.replace(/^\+/, ""),
+  ]
+
+  // Buscar cita pendiente más reciente para este teléfono
+  const cita = await prisma.citaAgendada.findFirst({
+    where: {
+      tenantId,
+      estado: "pendiente",
+      lead: { telefono: { in: phoneVariants } },
+    },
+    include: { lead: true },
+    orderBy: { creadoEn: "desc" },
+  })
+
+  if (!cita) {
+    console.error(`[webhook] Cal.com: no hay cita pendiente para teléfono ${booking.attendeePhone} en tenant ${tenantId}`)
+    return
+  }
+
+  // Actualizar cita
+  await prisma.citaAgendada.update({
+    where: { idCita: cita.idCita },
+    data: {
+      horaAgenda: booking.startTime,
+      estado: "confirmada",
+      calcomBookingUid: booking.bookingUid,
+      notas: booking.notes,
+    },
+  })
+
+  console.log(`[webhook] Cal.com: cita ${cita.idCita} confirmada, hora: ${booking.startTime.toISOString()}`)
+
+  // Enviar WhatsApp de confirmación
+  if (cita.lead.telefono) {
+    try {
+      const tz = "America/Bogota"
+      const dateStr = booking.startTime.toLocaleDateString("es-CO", {
+        weekday: "long", day: "numeric", month: "long", timeZone: tz,
+      })
+      const timeStr = booking.startTime.toLocaleTimeString("es-CO", {
+        hour: "2-digit", minute: "2-digit", hour12: true, timeZone: tz,
+      })
+      await sendTextMessage(
+        tenantId,
+        cita.lead.telefono,
+        `Tu cita ha sido confirmada, ${cita.lead.nombreLead}. ${dateStr} a las ${timeStr}. Te enviaremos un recordatorio 30 minutos antes.`
+      )
+    } catch (error) {
+      console.error(`[webhook] Cal.com: error enviando confirmación WhatsApp para cita ${cita.idCita}:`, error)
+    }
+  }
+
+  // Programar recordatorio 30 min antes
+  const reminderTime = new Date(booking.startTime.getTime() - 30 * 60 * 1000)
+
+  if (reminderTime.getTime() > Date.now()) {
+    try {
+      const delaySec = Math.floor((reminderTime.getTime() - Date.now()) / 1000)
+      const taskId = `cita-reminder-${cita.idCita}`
+      const taskName = await createTask(taskId, `/internal/cita-reminder/${cita.idCita}`, delaySec)
+
+      await prisma.citaAgendada.update({
+        where: { idCita: cita.idCita },
+        data: { reminderTaskId: taskName },
+      })
+
+      console.log(`[webhook] Cal.com: recordatorio programado para cita ${cita.idCita} en ${delaySec}s`)
+    } catch (error) {
+      console.error(`[webhook] Cal.com: error programando recordatorio para cita ${cita.idCita}:`, error)
+    }
+  } else {
+    console.log(`[webhook] Cal.com: cita ${cita.idCita} muy próxima, recordatorio omitido`)
+  }
+}
+
+async function handleCalcomBookingCancelled(
+  tenantId: string,
+  booking: ReturnType<typeof parseCalcomWebhook> & {}
+): Promise<void> {
+  const cita = await prisma.citaAgendada.findFirst({
+    where: {
+      tenantId,
+      calcomBookingUid: booking.bookingUid,
+    },
+    include: { lead: true },
+  })
+
+  if (!cita) {
+    console.log(`[webhook] Cal.com: no hay cita para booking cancelado ${booking.bookingUid}`)
+    return
+  }
+
+  // Cancelar Cloud Task de recordatorio si existe
+  if (cita.reminderTaskId) {
+    try {
+      await cancelTask(cita.reminderTaskId)
+    } catch (error) {
+      console.error(`[webhook] Cal.com: error cancelando recordatorio:`, error)
+    }
+  }
+
+  // Actualizar estado
+  await prisma.citaAgendada.update({
+    where: { idCita: cita.idCita },
+    data: { estado: "cancelada", reminderTaskId: null },
+  })
+
+  console.log(`[webhook] Cal.com: cita ${cita.idCita} cancelada`)
+
+  // Notificar al lead
+  if (cita.lead.telefono) {
+    try {
+      await sendTextMessage(
+        tenantId,
+        cita.lead.telefono,
+        `${cita.lead.nombreLead}, tu cita ha sido cancelada. Si deseas reagendar, por favor contáctanos.`
+      )
+    } catch (error) {
+      console.error(`[webhook] Cal.com: error enviando cancelación WhatsApp:`, error)
+    }
+  }
+}
 
 export { webhookRouter }

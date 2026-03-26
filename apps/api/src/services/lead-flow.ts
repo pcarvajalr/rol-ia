@@ -355,23 +355,33 @@ async function handleAgendarCita(
   tenantId: string,
   lead: { nombreLead: string; telefono: string | null }
 ): Promise<void> {
-  let calendarUrl: string
+  // 1. Obtener URL de booking: preferir calcom, fallback a google_calendar
+  let bookingUrl: string
+  let bookingPlatform: "calcom" | "google_calendar"
 
   try {
-    const credentials = await validateCredentials(tenantId, "google_calendar", ["calendar_url"])
-    calendarUrl = credentials.calendar_url
-  } catch (error) {
-    console.error(`[lead-flow] Calendar credentials error for tenant ${tenantId}:`, error)
-    await handleCredentialError(leadId, tenantId, lead.nombreLead, "google_calendar")
-    return
+    const calcomCreds = await validateCredentials(tenantId, "calcom", ["booking_url"])
+    bookingUrl = calcomCreds.booking_url
+    bookingPlatform = "calcom"
+  } catch {
+    try {
+      const gcalCreds = await validateCredentials(tenantId, "google_calendar", ["calendar_url"])
+      bookingUrl = gcalCreds.calendar_url
+      bookingPlatform = "google_calendar"
+    } catch (error) {
+      console.error(`[lead-flow] No booking platform configured for tenant ${tenantId}:`, error)
+      await handleCredentialError(leadId, tenantId, lead.nombreLead, "google_calendar")
+      return
+    }
   }
 
+  // 2. Enviar link por WhatsApp
   try {
     await validateCredentials(tenantId, "whatsapp", ["phone_number_id", "access_token"])
     await sendTextMessage(
       tenantId,
       lead.telefono!,
-      `¡Hola ${lead.nombreLead}! Agenda tu cita aquí: ${calendarUrl}`
+      `¡Hola ${lead.nombreLead}! Agenda tu cita aquí: ${bookingUrl}`
     )
   } catch (error) {
     console.error(`[lead-flow] WhatsApp text error for lead ${leadId}:`, error)
@@ -379,6 +389,7 @@ async function handleAgendarCita(
     return
   }
 
+  // 3. Registrar evento "Cita"
   const tipoCita = await prisma.catTipoEvento.findFirst({ where: { nombre: "Cita" } })
   if (tipoCita) {
     await prisma.leadEventHistory.create({
@@ -387,14 +398,13 @@ async function handleAgendarCita(
         leadId,
         idTipoEvento: tipoCita.id,
         actorIntervencion: "IA",
-        descripcion: `Enlace de calendario enviado a ${lead.telefono}`,
+        descripcion: `Enlace de ${bookingPlatform === "calcom" ? "Cal.com" : "calendario"} enviado a ${lead.telefono}`,
       },
     })
   }
 
-  // G7: Crear registro de cita agendada
-  // horaAgenda queda null — se actualizara cuando el lead confirme en el calendario
-  // estado = "pendiente" por default (campo en schema)
+  // 4. Crear registro de cita agendada
+  // horaAgenda queda null — se actualiza cuando Cal.com envía el webhook de confirmación
   await prisma.citaAgendada.create({
     data: {
       tenantId,
@@ -403,7 +413,7 @@ async function handleAgendarCita(
     },
   })
 
-  console.log(`[lead-flow] CitaAgendada created for lead ${leadId}`)
+  console.log(`[lead-flow] CitaAgendada created for lead ${leadId} (platform: ${bookingPlatform})`)
 
   await endFlow(tenantId, leadId)
 }

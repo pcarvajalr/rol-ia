@@ -208,27 +208,56 @@ intel.get("/scheduling", async (c) => {
   const db = createTenantClient(tenantId)
   const startOfDay = new Date()
   startOfDay.setHours(0, 0, 0, 0)
+  const endOfDay = new Date()
+  endOfDay.setHours(23, 59, 59, 999)
 
   const citas = await db.citaAgendada.findMany({
-    where: { creadoEn: { gte: startOfDay } },
+    where: {
+      OR: [
+        // Confirmadas/canceladas: citas de hoy en adelante
+        {
+          estado: { in: ["confirmada", "cancelada"] },
+          horaAgenda: { gte: startOfDay },
+        },
+        // Pendientes: creadas hoy
+        {
+          estado: "pendiente",
+          creadoEn: { gte: startOfDay },
+        },
+      ],
+    },
     include: { lead: true },
-    orderBy: { creadoEn: "asc" },
+    orderBy: [
+      { horaAgenda: { sort: "asc", nulls: "last" } },
+      { creadoEn: "asc" },
+    ],
   })
+
+  const tz = "America/Bogota"
 
   const appointments = citas.map((cita) => {
     let time = "--:--"
     if (cita.horaAgenda) {
-      const h = cita.horaAgenda.getHours()
-      const m = cita.horaAgenda.getMinutes()
-      time = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`
+      time = cita.horaAgenda.toLocaleTimeString("es-CO", {
+        hour: "2-digit", minute: "2-digit", hour12: false, timeZone: tz,
+      })
+    }
+
+    let date = ""
+    if (cita.horaAgenda) {
+      date = cita.horaAgenda.toLocaleDateString("es-CO", {
+        weekday: "short", day: "numeric", month: "short", timeZone: tz,
+      })
     }
 
     return {
       id: cita.idCita,
       lead: cita.lead.nombreLead,
       time,
+      date,
       channel: cita.canal.toLowerCase().includes("whatsapp") ? "whatsapp" : "voz",
       status: cita.estado,
+      notes: cita.notas || "",
       agent: "Rol G7",
     }
   })

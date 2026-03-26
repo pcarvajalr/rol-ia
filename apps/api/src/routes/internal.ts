@@ -1,6 +1,7 @@
 import { Hono } from "hono"
 import { prisma } from "../db/client"
 import { getLastEvent, handleTimeout, endFlow } from "../services/lead-flow"
+import { sendTextMessage } from "../modules/whatsapp"
 
 const internalRouter = new Hono()
 
@@ -89,6 +90,55 @@ internalRouter.post("/lead-cleanup", async (c) => {
 
   console.log(`[internal] Cleanup completed: ${cleaned} leads marked as timeout`)
   return c.json({ ok: true, cleaned })
+})
+
+// POST /internal/cita-reminder/:citaId
+internalRouter.post("/cita-reminder/:citaId", async (c) => {
+  const { citaId } = c.req.param()
+
+  const taskHeader = c.req.header("X-CloudTasks-TaskName")
+  if (process.env.NODE_ENV === "production" && !taskHeader) {
+    return c.json({ error: "Unauthorized" }, 403)
+  }
+
+  const cita = await prisma.citaAgendada.findUnique({
+    where: { idCita: citaId },
+    include: { lead: true },
+  })
+
+  if (!cita) {
+    return c.json({ error: "Cita no encontrada" }, 404)
+  }
+
+  if (cita.estado === "cancelada") {
+    console.log(`[internal] Cita ${citaId} cancelada, recordatorio omitido`)
+    return c.json({ ok: true, skipped: true })
+  }
+
+  if (!cita.lead.telefono) {
+    console.log(`[internal] Lead ${cita.leadId} sin teléfono, recordatorio omitido`)
+    return c.json({ ok: true, skipped: true })
+  }
+
+  try {
+    const timeStr = cita.horaAgenda
+      ? cita.horaAgenda.toLocaleTimeString("es-CO", {
+          hour: "2-digit", minute: "2-digit", hour12: true, timeZone: "America/Bogota",
+        })
+      : "pronto"
+
+    await sendTextMessage(
+      cita.tenantId,
+      cita.lead.telefono,
+      `Recordatorio: ${cita.lead.nombreLead}, tu cita es en 30 minutos (${timeStr}). Te esperamos.`
+    )
+    console.log(`[internal] Recordatorio enviado para cita ${citaId}`)
+  } catch (error) {
+    console.error(`[internal] Error enviando recordatorio para cita ${citaId}:`, error)
+    return c.json({ error: "Failed to send reminder" }, 500)
+  }
+
+  return c.json({ ok: true })
 })
 
 export { internalRouter }

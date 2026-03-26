@@ -166,6 +166,16 @@ Derivado del último evento en `leads_event_history`, NO de un campo. Consultar 
 ### WhatsApp — cada tenant tiene su Meta App
 Campos en bóveda (slug `whatsapp`): `phone_number`, `phone_number_id`, `account_id`, `access_token`, `app_secret`
 
+### Cal.com — plataforma de agendamiento
+- Slug en bóveda: `calcom`, campos: `booking_url`, `webhook_secret`
+- Webhook: `POST /webhook/calcom/:tenantId` — recibe `BOOKING_CREATED` y `BOOKING_CANCELLED`
+- Al confirmar booking: actualiza `CitaAgendada` (`horaAgenda`, `estado = "confirmada"`, `calcomBookingUid`) + envía confirmación WhatsApp + programa recordatorio 30min antes via Cloud Task
+- Al cancelar booking: actualiza `estado = "cancelada"` + cancela Cloud Task de recordatorio + envía mensaje WhatsApp
+- Endpoint interno: `POST /internal/cita-reminder/:citaId` — llamado por Cloud Task para enviar recordatorio
+- Fallback: si el tenant no tiene `calcom` configurado, usa `google_calendar.calendar_url`
+- El formulario de Cal.com DEBE pedir teléfono del asistente (es el campo de matching contra `LeadTracking`)
+- Filtro del dashboard: citas confirmadas/canceladas por `horaAgenda` (hoy), pendientes por `creadoEn` (hoy)
+
 ### Desarrollo local vs producción
 - **Cloud Tasks no funciona en local**: no hay adapter in-memory. En local, el webhook crea el lead y registra el evento, pero `startFlow` falla silenciosamente (no hay credenciales GCP). El lead queda con `flowJobId: null`.
 - **Para probar el flujo completo**: desplegar a Cloud Run. Cloud Tasks requiere la queue en GCP y las variables de entorno configuradas.
