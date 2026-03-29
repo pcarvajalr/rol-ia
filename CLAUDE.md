@@ -113,6 +113,61 @@ VITE_API_URL=             # URL del API (local: http://localhost:3001)
 - **Timestamps relativos**: `MetricsAdPerformance` y `CitaAgendada` usan offsets desde `now` para que siempre caigan dentro de las ventanas de consulta de los endpoints
 - **Datos reales**: todos los componentes del dashboard consultan PostgreSQL via Prisma (no hay datos mockeados en frontend). Los endpoints filtran por tiempo (`>= now - 5h`, `>= startOfDay`), por lo que el seed debe re-ejecutarse si los datos quedan fuera de rango
 
+### Simular datos para el dashboard
+
+Para insertar datos de prueba directamente en la BD (sin seed), ejecutar desde `apps/api`:
+
+**Simular lead desde webhook Clientify:**
+```bash
+curl -s -X POST "https://rolia-api-377846873300.southamerica-east1.run.app/webhook/clientify/75c003f2-d881-4343-8637-0477db03fbc1" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "hook": {"id": 1, "event": "contact.created", "target": "https://rolia-api.run.app"},
+    "data": {
+      "id": <EXTERNAL_ID_UNICO>,
+      "first_name": "Nombre",
+      "last_name": "Apellido",
+      "phones": [{"phone": "57XXXXXXXXXX"}],
+      "emails": [{"email": "email@test.com"}],
+      "status": null,
+      "contact_source": "Test Manual"
+    }
+  }'
+```
+- `id` debe ser un número único (no repetir entre leads). Usar un random como `$((RANDOM * 10000 + RANDOM))`
+- El lead activa el flujo completo (timer → WhatsApp → respuesta → VAPI/cita)
+- Para limpiar leads de prueba: `DELETE FROM leads_tracking WHERE fuente = 'Test Manual'` (borrar primero `leads_event_history`, `citas_agendadas` y `webhook_request_log` del lead)
+
+**Insertar datos de CPA real-time (MetricsAdPerformance):**
+```bash
+cd apps/api && npx prisma db execute --schema prisma/schema.prisma --stdin <<'SQL'
+DO $$
+DECLARE
+  tid UUID := '75c003f2-d881-4343-8637-0477db03fbc1';
+  ts TIMESTAMPTZ;
+  i INT;
+  total_intervals INT := 432; -- 3 días × 24h × 6 intervalos/hora (ajustar según necesidad)
+BEGIN
+  -- Limpiar datos futuros existentes
+  DELETE FROM metrics_ad_performance WHERE tenant_id = tid AND timestamp > NOW();
+
+  -- Generar datos cada 10 min (desde ahora hacia adelante)
+  FOR i IN 0..total_intervals LOOP
+    ts := NOW() + (i * INTERVAL '10 minutes');
+
+    INSERT INTO metrics_ad_performance (id, tenant_id, timestamp, fuente_id, gasto_intervalo, conv_intervalo)
+    VALUES (gen_random_uuid(), tid, ts, 'Meta', 15 + floor(random() * 35), floor(random() * 5));
+
+    INSERT INTO metrics_ad_performance (id, tenant_id, timestamp, fuente_id, gasto_intervalo, conv_intervalo)
+    VALUES (gen_random_uuid(), tid, ts, 'Google', 10 + floor(random() * 25), floor(random() * 4));
+  END LOOP;
+END $$;
+SQL
+```
+- El endpoint `/api/intel/cpa-realtime` consulta `metrics_ad_performance` con `timestamp >= NOW() - 5h`
+- Los datos se agrupan en intervalos de 10 min y se pivotean por `fuente_id` ("Meta" / "Google")
+- Para cubrir N días: `total_intervals = N × 24 × 6`
+
 ## Convenciones
 
 - Nombres de tablas/columnas en DB: snake_case (via `@map` / `@@map`)
