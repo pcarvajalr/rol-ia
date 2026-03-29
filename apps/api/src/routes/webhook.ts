@@ -404,8 +404,21 @@ webhookRouter.post("/meta", async (c) => {
   //   return c.json({ error: "Signature validation failed" }, 500)
   // }
 
-  // Process button responses
+  // Process button responses AND text numeric responses (fallback mode)
+  let responseId: string | null = null
+
   if (parsed.type === "button_reply" && parsed.buttonId) {
+    responseId = parsed.buttonId
+  } else if (parsed.type === "text" && parsed.textBody) {
+    // TEMPORAL: soportar respuestas numéricas cuando se usa texto en vez de template
+    const trimmed = parsed.textBody.trim()
+    if (["1", "2", "3", "4"].includes(trimmed)) {
+      responseId = trimmed
+      console.log(`[webhook] Meta: respuesta numérica "${trimmed}" de ${parsed.from}`)
+    }
+  }
+
+  if (responseId) {
     try {
       // Find lead with active flow by phone number (normalize: Meta sends without +, DB may have +)
       const phoneVariants = [parsed.from, `+${parsed.from}`]
@@ -421,7 +434,7 @@ webhookRouter.post("/meta", async (c) => {
       if (!lead) {
         console.error(`[webhook] No lead found for phone ${parsed.from} in tenant ${tenantId}`)
       } else {
-        await handleButtonResponse(tenantId, lead.leadId, parsed.buttonId!)
+        await handleButtonResponse(tenantId, lead.leadId, responseId)
       }
     } catch (error) {
       console.error("[webhook] Error processing Meta callback:", error)

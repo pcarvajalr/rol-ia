@@ -19,7 +19,7 @@ export async function makeOutboundCall(
     body: JSON.stringify({
       assistantId: credentials.assistant_id,
       phoneNumberId: credentials.phone_number_id,
-      customer: { number: phoneNumber },
+      customer: { number: phoneNumber.startsWith("+") ? phoneNumber : `+${phoneNumber}` },
     }),
   })
 

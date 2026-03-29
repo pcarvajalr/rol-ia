@@ -1,7 +1,7 @@
 import { prisma } from "../db/client"
 import { createTask, cancelTask } from "./task-scheduler"
 import { queryContactStatus } from "../modules/clientify"
-import { sendTemplate, sendTextMessage } from "../modules/whatsapp"
+import { sendTemplate, sendTextMessage, getTemplateStructure } from "../modules/whatsapp"
 import { makeOutboundCall } from "../modules/vapi"
 import { sendEmailToOwner } from "../modules/email"
 import { validateCredentials } from "../utils/encryption"
@@ -171,68 +171,65 @@ async function handleFirstTimeout(
     return
   }
 
-  // 3. Enviar WhatsApp: intentar template, si falla enviar texto
+  // 3. Enviar WhatsApp: verificar si existe template UTILITY aprobado, si no enviar texto
   let mensajeEnviado = false
   let metodoEnvio = ""
+  let useTemplate = false
 
+  // Verificar si el template existe y es UTILITY + APPROVED
   try {
-    await sendTemplate(tenantId, lead.telefono!, "rol_primer_contacto", "es", {
-      nombre: lead.nombreLead,
-    })
-    mensajeEnviado = true
-    metodoEnvio = "template"
-  } catch (error: unknown) {
-    const err = error as Error & { code?: string }
-    if (err.code === "INVALID_NUMBER") {
-      console.error(`[lead-flow] Invalid WhatsApp number for lead ${leadId}`)
-
-      const tipoTimeout = await prisma.catTipoEvento.findFirst({ where: { nombre: "Timeout" } })
-      if (tipoTimeout) {
-        await prisma.leadEventHistory.create({
-          data: {
-            tenantId,
-            leadId,
-            idTipoEvento: tipoTimeout.id,
-            actorIntervencion: "IA",
-            descripcion: "Error: número de WhatsApp inválido",
-          },
-        })
-      }
-
-      await sendEmailToOwner(
-        tenantId,
-        "Número de WhatsApp inválido",
-        `<p>El lead <strong>${lead.nombreLead}</strong> tiene un número de WhatsApp inválido: ${lead.telefono}</p>`
-      )
-
-      await endFlow(tenantId, leadId)
-      return
+    const templateInfo = await getTemplateStructure(tenantId, "rol_contacto_primero")
+    if (templateInfo.category === "UTILITY" && templateInfo.status === "APPROVED") {
+      useTemplate = true
+    } else {
+      console.log(`[lead-flow] Template "rol_contacto_primero" es ${templateInfo.category}/${templateInfo.status}, usando texto`)
     }
+  } catch {
+    console.log(`[lead-flow] Template "rol_contacto_primero" no encontrado, usando texto`)
+  }
 
-    // Template no existe o error al consultar — fallback a mensaje de texto
-    console.log(`[lead-flow] Template fallback for lead ${leadId}: ${err.message}`)
+  if (useTemplate) {
+    // Enviar template con botones
     try {
-      await sendTextMessage(
-        tenantId,
-        lead.telefono!,
-        `Hola ${lead.nombreLead}, gracias por tu interés. Un asesor se pondrá en contacto contigo pronto.`
-      )
+      await sendTemplate(tenantId, lead.telefono!, "rol_contacto_primero", "es", {
+        nombre: lead.nombreLead,
+      })
       mensajeEnviado = true
-      metodoEnvio = "texto"
-    } catch (textError: unknown) {
-      const textErr = textError as Error & { code?: string }
-      if (textErr.code === "INVALID_NUMBER") {
-        const tipoTimeout = await prisma.catTipoEvento.findFirst({ where: { nombre: "Timeout" } })
-        if (tipoTimeout) {
-          await prisma.leadEventHistory.create({
-            data: { tenantId, leadId, idTipoEvento: tipoTimeout.id, actorIntervencion: "IA", descripcion: "Error: número de WhatsApp inválido" },
-          })
-        }
-        await sendEmailToOwner(tenantId, "Número de WhatsApp inválido", `<p>El lead <strong>${lead.nombreLead}</strong> tiene un número de WhatsApp inválido: ${lead.telefono}</p>`)
-        await endFlow(tenantId, leadId)
+      metodoEnvio = "template"
+    } catch (error: unknown) {
+      const err = error as Error & { code?: string }
+      if (err.code === "INVALID_NUMBER") {
+        await handleInvalidNumber(leadId, tenantId, lead)
         return
       }
-      console.error(`[lead-flow] WhatsApp text also failed for lead ${leadId}:`, textErr.message)
+      console.error(`[lead-flow] Template send error for lead ${leadId}:`, err.message)
+      await handleCredentialError(leadId, tenantId, lead.nombreLead, "whatsapp")
+      return
+    }
+  } else {
+    // Enviar texto con opciones numéricas (fallback temporal)
+    try {
+      const textoOpciones = [
+        `Hola ${lead.nombreLead}, gracias por tu interés. ¿Cómo te gustaría que te contactemos?`,
+        "",
+        "1️⃣ Llamar Ahora",
+        "2️⃣ Agendar Cita",
+        "3️⃣ Seguir en el Chat",
+        "4️⃣ No Contactar",
+        "",
+        "Responde con el número de tu opción.",
+      ].join("\n")
+
+      await sendTextMessage(tenantId, lead.telefono!, textoOpciones)
+      mensajeEnviado = true
+      metodoEnvio = "texto_opciones"
+    } catch (error: unknown) {
+      const err = error as Error & { code?: string }
+      if (err.code === "INVALID_NUMBER") {
+        await handleInvalidNumber(leadId, tenantId, lead)
+        return
+      }
+      console.error(`[lead-flow] WhatsApp text failed for lead ${leadId}:`, err.message)
       await handleCredentialError(leadId, tenantId, lead.nombreLead, "whatsapp")
       return
     }
@@ -306,17 +303,24 @@ export async function handleButtonResponse(
 
   switch (normalizedId) {
     case "llamar_ahora":
+    case "1": // respuesta numérica (fallback texto)
       await handleLlamarAhora(leadId, tenantId, lead)
       break
     case "agendar_cita":
+    case "2": // respuesta numérica (fallback texto)
       await handleAgendarCita(leadId, tenantId, lead)
+      break
+    case "seguir_en_el_chat":
+    case "3": // respuesta numérica (fallback texto)
+      await handleSeguirEnChat(leadId, tenantId, lead)
       break
     case "no_contestar":
     case "no_contactar":
+    case "4": // respuesta numérica (fallback texto)
       await handleNoContactar(leadId, tenantId, lead)
       break
     default:
-      console.error(`[lead-flow] Unknown button: ${buttonId}`)
+      console.log(`[lead-flow] Unknown button/text: "${buttonId}", ignoring`)
   }
 }
 
@@ -418,6 +422,44 @@ async function handleAgendarCita(
   await endFlow(tenantId, leadId)
 }
 
+async function handleSeguirEnChat(
+  leadId: string,
+  tenantId: string,
+  lead: { nombreLead: string; telefono: string | null }
+): Promise<void> {
+  // El lead quiere seguir por chat — notificar al owner para que un asesor tome el chat
+  await sendEmailToOwner(
+    tenantId,
+    "Lead quiere seguir por chat",
+    `<p>El lead <strong>${lead.nombreLead}</strong> (${lead.telefono}) eligió "Seguir en el Chat". Un asesor debe continuar la conversación por WhatsApp.</p>`
+  )
+
+  try {
+    await sendTextMessage(
+      tenantId,
+      lead.telefono!,
+      `¡Perfecto ${lead.nombreLead}! Un asesor continuará la conversación por este medio. Gracias por tu paciencia.`
+    )
+  } catch (error) {
+    console.error(`[lead-flow] Error sending chat confirmation to lead ${leadId}:`, error)
+  }
+
+  const tipoWhatsApp = await prisma.catTipoEvento.findFirst({ where: { nombre: "WhatsApp" } })
+  if (tipoWhatsApp) {
+    await prisma.leadEventHistory.create({
+      data: {
+        tenantId,
+        leadId,
+        idTipoEvento: tipoWhatsApp.id,
+        actorIntervencion: "IA",
+        descripcion: "Seguir en el Chat — asesor notificado",
+      },
+    })
+  }
+
+  await endFlow(tenantId, leadId)
+}
+
 async function handleNoContactar(
   leadId: string,
   tenantId: string,
@@ -449,6 +491,35 @@ async function handleNoContactar(
       data: { idEstado: estadoNuevo.id },
     })
   }
+
+  await endFlow(tenantId, leadId)
+}
+
+async function handleInvalidNumber(
+  leadId: string,
+  tenantId: string,
+  lead: { nombreLead: string; telefono: string | null }
+): Promise<void> {
+  console.error(`[lead-flow] Invalid WhatsApp number for lead ${leadId}`)
+
+  const tipoTimeout = await prisma.catTipoEvento.findFirst({ where: { nombre: "Timeout" } })
+  if (tipoTimeout) {
+    await prisma.leadEventHistory.create({
+      data: {
+        tenantId,
+        leadId,
+        idTipoEvento: tipoTimeout.id,
+        actorIntervencion: "IA",
+        descripcion: "Error: número de WhatsApp inválido",
+      },
+    })
+  }
+
+  await sendEmailToOwner(
+    tenantId,
+    "Número de WhatsApp inválido",
+    `<p>El lead <strong>${lead.nombreLead}</strong> tiene un número de WhatsApp inválido: ${lead.telefono}</p>`
+  )
 
   await endFlow(tenantId, leadId)
 }

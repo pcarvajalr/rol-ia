@@ -14,6 +14,8 @@ interface TemplateComponent {
 interface TemplateInfo {
   components: TemplateComponent[]
   language: string
+  category: string
+  status: string
 }
 
 export async function getTemplateStructure(
@@ -33,7 +35,7 @@ export async function getTemplateStructure(
   }
 
   const data = (await response.json()) as {
-    data: Array<{ components: TemplateComponent[]; language: string }>
+    data: Array<{ components: TemplateComponent[]; language: string; category: string; status: string }>
   }
 
   if (!data.data?.length) {
@@ -43,6 +45,8 @@ export async function getTemplateStructure(
   return {
     components: data.data[0].components,
     language: data.data[0].language,
+    category: data.data[0].category,
+    status: data.data[0].status,
   }
 }
 
@@ -176,6 +180,7 @@ export async function sendTextMessage(
 interface MetaWebhookResult {
   type: "button_reply" | "text" | "unknown"
   buttonId?: string
+  textBody?: string
   from: string
   phoneNumberId: string
 }
@@ -225,6 +230,7 @@ export function parseWebhookPayload(body: unknown): MetaWebhookResult | null {
     result.buttonId = message.button.payload || message.button.text
   } else if (message.type === "text") {
     result.type = "text"
+    result.textBody = message.text?.body || ""
   }
 
   return result
