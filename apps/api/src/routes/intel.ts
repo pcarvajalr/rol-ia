@@ -268,21 +268,31 @@ intel.get("/scheduling", async (c) => {
 // GET /intel/leak-diagnosis
 intel.get("/leak-diagnosis", async (c) => {
   const tenantId = c.get("tenantId")
-  if (!tenantId) return c.json({ reasons: [] })
+  if (!tenantId) return c.json({ lossIndex: { lost: 0, total: 0, percentage: 0 }, reasons: [] })
 
   const db = createTenantClient(tenantId)
 
-  const records = await db.iaFugaDiagnostico.findMany()
+  const [totalLeads, lostLeads, records] = await Promise.all([
+    db.leadTracking.count(),
+    db.leadTracking.count({ where: { idEstado: 40 } }),
+    db.iaFugaDiagnostico.findMany(),
+  ])
 
-  const reasons = records.map((r) => ({
-    name: r.categoriaFuga,
-    frequency: r.frecuenciaPorcentaje,
-    impact: r.impactoNegocio,
-    size: r.volumenLeads,
-    color: r.colorHex,
-  }))
+  const percentage = totalLeads > 0 ? Math.round((lostLeads / totalLeads) * 1000) / 10 : 0
 
-  return c.json({ reasons })
+  const reasons = records
+    .map((r) => ({
+      name: r.categoriaFuga,
+      frequency: r.frecuenciaPorcentaje,
+      impact: r.impactoNegocio,
+      volume: r.volumenLeads,
+    }))
+    .sort((a, b) => b.frequency - a.frequency)
+
+  return c.json({
+    lossIndex: { lost: lostLeads, total: totalLeads, percentage },
+    reasons,
+  })
 })
 
 // GET /intel/copywriter
