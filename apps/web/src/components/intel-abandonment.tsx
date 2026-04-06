@@ -65,8 +65,8 @@ function formatTime(ms: number): string {
 }
 
 const ESTADO_COLORS: Record<string, string> = {
-  "Nuevo": "border-blue-400/50 text-blue-400",
-  "Contactado": "border-emerald-400/50 text-emerald-400",
+  "Frío": "border-blue-400/50 text-blue-400",
+  "En proceso": "border-emerald-400/50 text-emerald-400",
   "En negociación": "border-amber-400/50 text-amber-400",
   "Cerrado": "border-violet-400/50 text-violet-400",
   "Perdido": "border-rose-400/50 text-rose-400",

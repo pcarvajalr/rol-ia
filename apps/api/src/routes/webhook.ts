@@ -144,13 +144,13 @@ async function handleClientifyWebhook(tenantId: string, body: unknown) {
   // Parsear payload
   const lead = parseClientifyPayload(body)
 
-  // Buscar estado "Nuevo" por nombre
-  const estadoNuevo = await prisma.catEstadoGestion.findFirst({
-    where: { nombre: "Nuevo" },
+  // Buscar estado "Frío" por nombre
+  const estadoFrio = await prisma.catEstadoGestion.findFirst({
+    where: { nombre: "Frío" },
   })
 
-  if (!estadoNuevo) {
-    console.error("[webhook] Estado 'Nuevo' no encontrado en cat_estados_gestion")
+  if (!estadoFrio) {
+    console.error("[webhook] Estado 'Frío' no encontrado en cat_estados_gestion")
     return
   }
 
@@ -286,7 +286,7 @@ async function handleClientifyWebhook(tenantId: string, body: unknown) {
       fuente: lead.fuente,
       telefono: lead.telefono,
       email: lead.email,
-      idEstado: estadoNuevo.id,
+      idEstado: estadoFrio.id,
       crmStatusInicial: lead.status?.toLowerCase() || null,
     },
   })

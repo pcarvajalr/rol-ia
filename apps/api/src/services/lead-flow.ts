@@ -237,14 +237,14 @@ async function handleFirstTimeout(
 
   if (!mensajeEnviado) return
 
-  // 4. Actualizar estado a "Contactado"
-  const estadoContactado = await prisma.catEstadoGestion.findFirst({
-    where: { nombre: "Contactado" },
+  // 4. Actualizar estado a "En proceso"
+  const estadoEnProceso = await prisma.catEstadoGestion.findFirst({
+    where: { nombre: "En proceso" },
   })
-  if (estadoContactado) {
+  if (estadoEnProceso) {
     await prisma.leadTracking.update({
       where: { leadId },
-      data: { idEstado: estadoContactado.id },
+      data: { idEstado: estadoEnProceso.id },
     })
   }
 
@@ -484,11 +484,11 @@ async function handleNoContactar(
     })
   }
 
-  const estadoNuevo = await prisma.catEstadoGestion.findFirst({ where: { nombre: "Nuevo" } })
-  if (estadoNuevo) {
+  const estadoFrio = await prisma.catEstadoGestion.findFirst({ where: { nombre: "Frío" } })
+  if (estadoFrio) {
     await prisma.leadTracking.update({
       where: { leadId },
-      data: { idEstado: estadoNuevo.id },
+      data: { idEstado: estadoFrio.id },
     })
   }
 

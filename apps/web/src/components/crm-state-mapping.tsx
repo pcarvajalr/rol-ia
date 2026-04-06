@@ -144,7 +144,7 @@ export function CrmStateMapping({ token }: { token: string }) {
           <div className="space-y-1.5 flex-1">
             <label className="text-xs text-muted-foreground">Estado en CRM</label>
             <Input
-              placeholder="Ej: Contactado"
+              placeholder="Ej: En proceso"
               value={crmStatus}
               onChange={(e) => setCrmStatus(e.target.value)}
             />
