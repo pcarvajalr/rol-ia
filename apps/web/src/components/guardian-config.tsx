@@ -1,12 +1,11 @@
 
-import { motion } from "framer-motion"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Slider } from "@/components/ui/slider"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Settings2, User, Phone, CheckCircle2, Loader2, RefreshCw } from "lucide-react"
+import { Settings2, Loader2, RefreshCw } from "lucide-react"
 
 interface GuardianConfigProps {
   slaMinutes: number
@@ -307,53 +306,6 @@ export function GuardianConfig({
             <Badge variant="outline" className="border-alert/30 text-alert font-mono text-xs">
               &gt; {tiempoVerdeMins + tiempoAmarilloMins} min
             </Badge>
-          </div>
-        </div>
-
-        {/* Mapeo de Datos */}
-        <div className="flex flex-col gap-3">
-          <Label className="text-foreground text-sm font-medium">
-            Mapeo de Datos del Flujo Entrante
-          </Label>
-          <div className="flex flex-col gap-2">
-            <motion.div
-              initial={{ opacity: 0, x: -8 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.1 }}
-              className="bg-rescue/5 border-rescue/20 flex items-center gap-3 rounded-lg border px-4 py-2.5"
-            >
-              <div className="bg-rescue/10 flex h-7 w-7 items-center justify-center rounded-md">
-                <User className="text-rescue h-3.5 w-3.5" />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-foreground text-xs font-medium">
-                  Nombre
-                </span>
-                <span className="text-muted-foreground text-[10px]">
-                  Capturando del flujo entrante
-                </span>
-              </div>
-              <CheckCircle2 className="text-rescue ml-auto h-4 w-4" />
-            </motion.div>
-            <motion.div
-              initial={{ opacity: 0, x: -8 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.2 }}
-              className="bg-rescue/5 border-rescue/20 flex items-center gap-3 rounded-lg border px-4 py-2.5"
-            >
-              <div className="bg-rescue/10 flex h-7 w-7 items-center justify-center rounded-md">
-                <Phone className="text-rescue h-3.5 w-3.5" />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-foreground text-xs font-medium">
-                  Telefono
-                </span>
-                <span className="text-muted-foreground text-[10px]">
-                  Capturando del flujo entrante
-                </span>
-              </div>
-              <CheckCircle2 className="text-rescue ml-auto h-4 w-4" />
-            </motion.div>
           </div>
         </div>
 
