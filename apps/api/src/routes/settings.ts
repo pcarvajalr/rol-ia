@@ -15,7 +15,10 @@ const GUARDIAN_DEFAULTS = {
   slaMinutes: 7,
   criticalState: "cold-lead",
   doubleTouchMinutes: 2,
-  tiempoRespuestaLeadSeg: 15,
+  tiempoRespuestaLeadSeg: 420,
+  tiempoLlamadaSeg: 120,
+  callRetryDays: 2,
+  callRetryMax: 3,
   tiempoVerdeMins: 5,
   tiempoAmarilloMins: 5,
 }
@@ -53,8 +56,8 @@ settingsRouter.put("/guardian", async (c) => {
     // Validate tiempoRespuestaLeadSeg
     if (body.tiempoRespuestaLeadSeg !== undefined) {
       const val = Number(body.tiempoRespuestaLeadSeg)
-      if (isNaN(val) || val < 15 || val > 300) {
-        return c.json({ error: "tiempoRespuestaLeadSeg debe estar entre 15 y 300 segundos" }, 400)
+      if (isNaN(val) || val < 60 || val > 1800) {
+        return c.json({ error: "tiempoRespuestaLeadSeg debe estar entre 60 y 1800 segundos" }, 400)
       }
     }
 
@@ -88,6 +91,30 @@ settingsRouter.put("/guardian", async (c) => {
       }
     }
 
+    // Validate tiempoLlamadaSeg (1-30 min stored as 60-1800 seconds)
+    if (body.tiempoLlamadaSeg !== undefined) {
+      const val = Number(body.tiempoLlamadaSeg)
+      if (isNaN(val) || val < 60 || val > 1800) {
+        return c.json({ error: "tiempoLlamadaSeg debe estar entre 60 y 1800 segundos" }, 400)
+      }
+    }
+
+    // Validate callRetryDays
+    if (body.callRetryDays !== undefined) {
+      const val = Number(body.callRetryDays)
+      if (!Number.isInteger(val) || val < 1 || val > 7) {
+        return c.json({ error: "callRetryDays debe ser entero entre 1 y 7" }, 400)
+      }
+    }
+
+    // Validate callRetryMax
+    if (body.callRetryMax !== undefined) {
+      const val = Number(body.callRetryMax)
+      if (!Number.isInteger(val) || val < 1 || val > 5) {
+        return c.json({ error: "callRetryMax debe ser entero entre 1 y 5" }, 400)
+      }
+    }
+
     // Get current settings to merge
     const tenant = await prisma.tenant.findUnique({
       where: { id: tenantId },
@@ -105,6 +132,9 @@ settingsRouter.put("/guardian", async (c) => {
     if (body.tiempoRespuestaLeadSeg !== undefined) guardianUpdate.tiempoRespuestaLeadSeg = Number(body.tiempoRespuestaLeadSeg)
     if (body.tiempoVerdeMins !== undefined) guardianUpdate.tiempoVerdeMins = Number(body.tiempoVerdeMins)
     if (body.tiempoAmarilloMins !== undefined) guardianUpdate.tiempoAmarilloMins = Number(body.tiempoAmarilloMins)
+    if (body.tiempoLlamadaSeg !== undefined) guardianUpdate.tiempoLlamadaSeg = Number(body.tiempoLlamadaSeg)
+    if (body.callRetryDays !== undefined) guardianUpdate.callRetryDays = Number(body.callRetryDays)
+    if (body.callRetryMax !== undefined) guardianUpdate.callRetryMax = Number(body.callRetryMax)
 
     // Merge with existing settings (preserve other keys)
     const updatedSettings = {

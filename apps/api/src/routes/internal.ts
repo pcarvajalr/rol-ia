@@ -1,6 +1,6 @@
 import { Hono } from "hono"
 import { prisma } from "../db/client"
-import { getLastEvent, handleTimeout, endFlow } from "../services/lead-flow"
+import { getLastEvent, handleTimeout, handleCallRetry } from "../services/lead-flow"
 import { sendTextMessage } from "../modules/whatsapp"
 
 const internalRouter = new Hono()
@@ -46,50 +46,33 @@ internalRouter.post("/lead-timeout/:leadId", async (c) => {
   return c.json({ ok: true })
 })
 
-// POST /internal/lead-cleanup
-internalRouter.post("/lead-cleanup", async (c) => {
-  const twelveHoursAgo = new Date(Date.now() - 12 * 60 * 60 * 1000)
+// POST /internal/lead-call-retry/:leadId
+internalRouter.post("/lead-call-retry/:leadId", async (c) => {
+  const { leadId } = c.req.param()
 
-  const activeLeads = await prisma.leadTracking.findMany({
-    where: {
-      flowJobId: { not: null },
-    },
-    select: { leadId: true, tenantId: true, flowJobId: true, nombreLead: true },
-  })
-
-  const tipoTimeout = await prisma.catTipoEvento.findFirst({
-    where: { nombre: "Timeout" },
-  })
-
-  if (!tipoTimeout) {
-    console.error("[internal] Tipo evento 'Timeout' no encontrado")
-    return c.json({ error: "Timeout event type not found" }, 500)
+  const taskHeader = c.req.header("X-CloudTasks-TaskName")
+  if (process.env.NODE_ENV === "production" && !taskHeader) {
+    return c.json({ error: "Unauthorized" }, 403)
   }
 
-  let cleaned = 0
+  const lead = await prisma.leadTracking.findUnique({
+    where: { leadId },
+    select: { leadId: true, tenantId: true, flowJobId: true, callRetriesRemaining: true },
+  })
 
-  for (const lead of activeLeads) {
-    const lastEvent = await getLastEvent(lead.leadId, lead.tenantId)
-
-    if (lastEvent && lastEvent.timestamp < twelveHoursAgo) {
-      await prisma.leadEventHistory.create({
-        data: {
-          tenantId: lead.tenantId,
-          leadId: lead.leadId,
-          idTipoEvento: tipoTimeout.id,
-          actorIntervencion: "IA",
-          descripcion: "Timeout - flujo expirado",
-        },
-      })
-
-      await endFlow(lead.tenantId, lead.leadId)
-      cleaned++
-      console.log(`[internal] Lead ${lead.leadId} (${lead.nombreLead}) marked as timeout`)
-    }
+  if (!lead) {
+    return c.json({ error: "Lead no encontrado" }, 404)
   }
 
-  console.log(`[internal] Cleanup completed: ${cleaned} leads marked as timeout`)
-  return c.json({ ok: true, cleaned })
+  // Si ya no tiene reintentos o el flujo fue cerrado, saltar
+  if (!lead.flowJobId || (lead.callRetriesRemaining !== null && lead.callRetriesRemaining <= 0)) {
+    console.log(`[internal] Lead ${leadId} no tiene reintentos pendientes, skipping`)
+    return c.json({ ok: true, skipped: true })
+  }
+
+  await handleCallRetry(leadId, lead.tenantId)
+
+  return c.json({ ok: true })
 })
 
 // POST /internal/cita-reminder/:citaId

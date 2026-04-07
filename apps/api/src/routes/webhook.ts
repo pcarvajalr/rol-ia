@@ -6,7 +6,7 @@ import { sendEmailToOwner } from "../modules/email"
 import { parseCalcomWebhook, validateCalcomSignature } from "../modules/calcom"
 import { sendTextMessage } from "../modules/whatsapp"
 import { createTask, cancelTask } from "../services/task-scheduler"
-import { startFlow, handleButtonResponse, stopFlowWithSemaphore } from "../services/lead-flow"
+import { startFlow, handleButtonResponse, stopFlowWithSemaphore, handleCallResult } from "../services/lead-flow"
 import {
   parseWebhookPayload,
   findTenantByPhoneNumberId,
@@ -44,6 +44,19 @@ webhookRouter.post("/calcom/:tenantId", async (c) => {
 
   // Responder 200 inmediato, procesar en background
   processCalcomInBackground(tenantId, rawBody, body, c.req.raw.headers)
+
+  return c.json({ ok: true })
+})
+
+// POST /webhook/vapi/:tenantId (debe ir ANTES de la ruta genérica /:plataforma/:idEmpresa)
+webhookRouter.post("/vapi/:tenantId", async (c) => {
+  const { tenantId } = c.req.param()
+  const body = await c.req.json()
+
+  console.log(`[webhook] Vapi recibido para tenant ${tenantId}:`, JSON.stringify(body))
+
+  // Responder 200 inmediato
+  processVapiInBackground(tenantId, body, c.req.raw.headers)
 
   return c.json({ ok: true })
 })
@@ -251,7 +264,7 @@ async function handleClientifyWebhook(tenantId: string, body: unknown) {
     if (newEstadoId) {
       await prisma.leadTracking.update({
         where: { leadId: existingLead.leadId },
-        data: { idEstado: newEstadoId },
+        data: { idEstado: newEstadoId, callRetriesRemaining: 0 },
       })
     }
 
@@ -266,6 +279,15 @@ async function handleClientifyWebhook(tenantId: string, body: unknown) {
     })
     return
   }
+
+  // Obtener callRetryMax de la config para inicializar reintentos
+  const tenantForSettings = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { settings: true },
+  })
+  const settingsJson = (tenantForSettings?.settings as Record<string, unknown>) ?? {}
+  const guardianJson = (settingsJson.guardian as Record<string, unknown>) ?? {}
+  const callRetryMax = (guardianJson.callRetryMax as number) || 3
 
   // Buscar tipo de evento "Lead ingreso"
   const tipoIngreso = await prisma.catTipoEvento.findFirst({
@@ -288,6 +310,7 @@ async function handleClientifyWebhook(tenantId: string, body: unknown) {
       email: lead.email,
       idEstado: estadoFrio.id,
       crmStatusInicial: lead.status?.toLowerCase() || null,
+      callRetriesRemaining: callRetryMax + 1,
     },
   })
 
@@ -624,6 +647,116 @@ async function handleCalcomBookingCancelled(
     } catch (error) {
       console.error(`[webhook] Cal.com: error enviando cancelación WhatsApp:`, error)
     }
+  }
+}
+
+// =============================================
+// VAPI WEBHOOK — Recibe resultado de llamadas
+// Solo procesa el evento "end-of-call-report", el resto se ignora con 200
+// =============================================
+
+const UNANSWERED_REASONS = [
+  "customer-did-not-answer",
+  "customer-busy",
+  "voicemail",
+  "silence-timed-out",
+  "twilio-failed-to-connect-call",
+  "twilio-reported-customer-misdialed",
+  "vonage-rejected",
+]
+
+async function processVapiInBackground(
+  tenantId: string,
+  body: unknown,
+  headers: Headers
+): Promise<void> {
+  try {
+    // 1. Verificar tenant
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { id: true, active: true },
+    })
+    if (!tenant || !tenant.active) {
+      console.error(`[webhook] Vapi: tenant ${tenantId} no encontrado o inactivo`)
+      return
+    }
+
+    // 2. Autenticar via header vapi-rolia-key vs boveda
+    const headerKey = headers.get("vapi-rolia-key")
+    if (!headerKey) {
+      console.error(`[webhook] Vapi: header vapi-rolia-key ausente para tenant ${tenantId}`)
+      return
+    }
+
+    try {
+      const credentials = await validateCredentials(tenantId, "vapi", ["secret_server_url"])
+      if (credentials.secret_server_url !== headerKey) {
+        console.error(`[webhook] Vapi: key invalida para tenant ${tenantId}`)
+        return
+      }
+    } catch {
+      console.error(`[webhook] Vapi: credenciales no configuradas para tenant ${tenantId}`)
+      return
+    }
+
+    // 3. Filtrar solo end-of-call-report
+    const message = (body as Record<string, unknown>)?.message as Record<string, unknown> | undefined
+    if (!message || message.type !== "end-of-call-report") {
+      console.log(`[webhook] Vapi: evento ${message?.type ?? "unknown"} ignorado para tenant ${tenantId}`)
+      return
+    }
+
+    const endedReason = (message.endedReason as string) || "unknown"
+    const call = message.call as Record<string, unknown> | undefined
+    const customer = call?.customer as Record<string, unknown> | undefined
+    const phoneNumber = (customer?.number as string) || ""
+
+    console.log(`[webhook] Vapi end-of-call-report: endedReason=${endedReason}, phone=${phoneNumber}, tenant=${tenantId}`)
+
+    // 4. Buscar lead por telefono
+    const cleanPhone = phoneNumber.replace(/^\+/, "")
+    const phoneVariants = [phoneNumber, cleanPhone, `+${cleanPhone}`]
+
+    const lead = await prisma.leadTracking.findFirst({
+      where: {
+        tenantId,
+        telefono: { in: phoneVariants },
+        flowJobId: { not: null },
+      },
+      orderBy: { fechaCreacion: "desc" },
+    })
+
+    if (!lead) {
+      console.error(`[webhook] Vapi: no lead encontrado para telefono ${phoneNumber} en tenant ${tenantId}`)
+      await logWebhookRequest({
+        tenantId,
+        source: "vapi",
+        externalId: null,
+        crmStatus: null,
+        leadId: null,
+        action: "ignored",
+        payload: body,
+      })
+      return
+    }
+
+    // 5. Log webhook
+    const answered = !UNANSWERED_REASONS.includes(endedReason)
+    await logWebhookRequest({
+      tenantId,
+      source: "vapi",
+      externalId: null,
+      crmStatus: endedReason,
+      leadId: lead.leadId,
+      action: answered ? "call_answered" : "call_unanswered",
+      payload: body,
+    })
+
+    // 6. Procesar resultado
+    await handleCallResult(tenantId, lead.leadId, answered, endedReason)
+
+  } catch (error) {
+    console.error(`[webhook] Error procesando Vapi para tenant ${tenantId}:`, error)
   }
 }
 

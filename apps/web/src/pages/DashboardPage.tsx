@@ -149,7 +149,10 @@ export function DashboardPage() {
   const [slaMinutes, setSlaMinutes] = useState(7)
   const [criticalState, setCriticalState] = useState("cold-lead")
   const [doubleTouchMinutes, setDoubleTouchMinutes] = useState(2)
-  const [tiempoRespuestaLeadSeg, setTiempoRespuestaLeadSeg] = useState(15)
+  const [tiempoRespuestaLeadSeg, setTiempoRespuestaLeadSeg] = useState(420)
+  const [tiempoLlamadaSeg, setTiempoLlamadaSeg] = useState(120)
+  const [callRetryDays, setCallRetryDays] = useState(2)
+  const [callRetryMax, setCallRetryMax] = useState(3)
   const [tiempoVerdeMins, setTiempoVerdeMins] = useState(5)
   const [tiempoAmarilloMins, setTiempoAmarilloMins] = useState(5)
   const [isSavingGuardian, setIsSavingGuardian] = useState(false)
@@ -167,7 +170,10 @@ export function DashboardPage() {
           setSlaMinutes(data.slaMinutes ?? 7)
           setCriticalState(data.criticalState ?? "cold-lead")
           setDoubleTouchMinutes(data.doubleTouchMinutes ?? 2)
-          setTiempoRespuestaLeadSeg(data.tiempoRespuestaLeadSeg ?? 15)
+          setTiempoRespuestaLeadSeg(data.tiempoRespuestaLeadSeg ?? 420)
+          if (data.tiempoLlamadaSeg) setTiempoLlamadaSeg(data.tiempoLlamadaSeg)
+          if (data.callRetryDays) setCallRetryDays(data.callRetryDays)
+          if (data.callRetryMax) setCallRetryMax(data.callRetryMax)
           if (data.tiempoVerdeMins) setTiempoVerdeMins(data.tiempoVerdeMins)
           if (data.tiempoAmarilloMins) setTiempoAmarilloMins(data.tiempoAmarilloMins)
         }
@@ -195,6 +201,9 @@ export function DashboardPage() {
           criticalState,
           doubleTouchMinutes,
           tiempoRespuestaLeadSeg,
+          tiempoLlamadaSeg,
+          callRetryDays,
+          callRetryMax,
           tiempoVerdeMins,
           tiempoAmarilloMins,
         }),
@@ -478,6 +487,12 @@ export function DashboardPage() {
                 onDoubleTouchChange={setDoubleTouchMinutes}
                 tiempoRespuestaLeadSeg={tiempoRespuestaLeadSeg}
                 onTiempoRespuestaChange={setTiempoRespuestaLeadSeg}
+                tiempoLlamadaSeg={tiempoLlamadaSeg}
+                onTiempoLlamadaChange={setTiempoLlamadaSeg}
+                callRetryDays={callRetryDays}
+                onCallRetryDaysChange={setCallRetryDays}
+                callRetryMax={callRetryMax}
+                onCallRetryMaxChange={setCallRetryMax}
                 tiempoVerdeMins={tiempoVerdeMins}
                 onTiempoVerdeChange={setTiempoVerdeMins}
                 tiempoAmarilloMins={tiempoAmarilloMins}

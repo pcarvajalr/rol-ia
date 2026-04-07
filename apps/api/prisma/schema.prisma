@@ -111,6 +111,7 @@ model LeadTracking {
   crmStatusInicial String?  @map("crm_status_inicial")
   semaphoreTimeMs  BigInt?  @map("semaphore_time_ms")
   semaphoreColor   String?  @map("semaphore_color")
+  callRetriesRemaining Int?     @map("call_retries_remaining")
 
   tenant      Tenant             @relation(fields: [tenantId], references: [id])
   estado      CatEstadoGestion?  @relation(fields: [idEstado], references: [id])

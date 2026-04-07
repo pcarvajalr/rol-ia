@@ -29,6 +29,8 @@ import {
   Save,
   Check,
   Loader2,
+  Copy,
+  Link2,
 } from "lucide-react"
 import { useAuthStore } from "@/stores/auth-store"
 
@@ -503,6 +505,40 @@ export function SecurityVault() {
                           </div>
                         ))}
                       </div>
+
+                      {/* Webhook info para Vapi */}
+                      {mod.slug === "vapi" && user?.tenantId && (
+                        <div className="bg-background/50 border-border/30 rounded-md border p-3 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <Link2 className="text-aura h-3 w-3" />
+                            <span className="text-foreground text-[11px] font-medium">Server URL para Vapi</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              readOnly
+                              value={`https://rolia-api-377846873300.southamerica-east1.run.app/webhook/vapi/${user.tenantId}`}
+                              className="border-border/30 bg-background/50 text-foreground h-7 font-mono text-[10px]"
+                            />
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="shrink-0 h-7 w-7"
+                              onClick={() => {
+                                navigator.clipboard.writeText(
+                                  `https://rolia-api-377846873300.southamerica-east1.run.app/webhook/vapi/${user.tenantId}`
+                                )
+                              }}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                          </div>
+                          <p className="text-muted-foreground text-[10px]">
+                            Configura este Server URL en tu asistente de Vapi. Agrega un HTTP header{" "}
+                            <code className="text-foreground bg-secondary px-1 rounded">vapi-rolia-key</code> con el mismo
+                            valor del campo secret_server_url de arriba.
+                          </p>
+                        </div>
+                      )}
 
                       {/* Save button + feedback */}
                       {isAdmin && (

@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Settings2, User, Phone, CheckCircle2, Loader2 } from "lucide-react"
+import { Settings2, User, Phone, CheckCircle2, Loader2, RefreshCw } from "lucide-react"
 
 interface GuardianConfigProps {
   slaMinutes: number
@@ -17,6 +17,12 @@ interface GuardianConfigProps {
   onDoubleTouchChange: (value: number) => void
   tiempoRespuestaLeadSeg: number
   onTiempoRespuestaChange: (value: number) => void
+  tiempoLlamadaSeg: number
+  onTiempoLlamadaChange: (value: number) => void
+  callRetryDays: number
+  onCallRetryDaysChange: (value: number) => void
+  callRetryMax: number
+  onCallRetryMaxChange: (value: number) => void
   tiempoVerdeMins: number
   onTiempoVerdeChange: (v: number) => void
   tiempoAmarilloMins: number
@@ -34,6 +40,12 @@ export function GuardianConfig({
   onDoubleTouchChange,
   tiempoRespuestaLeadSeg,
   onTiempoRespuestaChange,
+  tiempoLlamadaSeg,
+  onTiempoLlamadaChange,
+  callRetryDays,
+  onCallRetryDaysChange,
+  callRetryMax,
+  onCallRetryMaxChange,
   tiempoVerdeMins,
   onTiempoVerdeChange,
   tiempoAmarilloMins,
@@ -52,31 +64,55 @@ export function GuardianConfig({
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
-        {/* Tiempo de Respuesta del Lead */}
+        {/* Tiempo de espera WhatsApp */}
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <Label className="text-foreground text-sm font-medium">
-              Tiempo de Respuesta del Lead
+              Tiempo de espera WhatsApp
             </Label>
             <Badge
               variant="outline"
               className="border-aura/30 text-aura font-mono text-xs"
             >
-              {tiempoRespuestaLeadSeg} seg
+              {Math.round(tiempoRespuestaLeadSeg / 60)} min
             </Badge>
           </div>
           <Slider
             value={[tiempoRespuestaLeadSeg]}
             onValueChange={(v) => onTiempoRespuestaChange(v[0])}
-            min={15}
-            max={300}
-            step={5}
+            min={60}
+            max={1800}
+            step={60}
             className="[&_[data-slot=slider-range]]:bg-aura [&_[data-slot=slider-thumb]]:border-aura"
           />
           <p className="text-muted-foreground text-xs">
-            Tiempo en segundos que el sistema espera antes de gestionar
-            automaticamente un lead nuevo. Si el asesor no atiende dentro de
-            este tiempo, Rol.IA inicia el contacto automatico.
+            Tiempo antes de que Rol.IA envie WhatsApp automatico si el asesor no responde.
+          </p>
+        </div>
+
+        {/* Tiempo de espera Llamada */}
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <Label className="text-foreground text-sm font-medium">
+              Tiempo de espera Llamada
+            </Label>
+            <Badge
+              variant="outline"
+              className="border-aura/30 text-aura font-mono text-xs"
+            >
+              {Math.round(tiempoLlamadaSeg / 60)} min
+            </Badge>
+          </div>
+          <Slider
+            value={[tiempoLlamadaSeg]}
+            onValueChange={(v) => onTiempoLlamadaChange(v[0])}
+            min={60}
+            max={1800}
+            step={60}
+            className="[&_[data-slot=slider-range]]:bg-aura [&_[data-slot=slider-thumb]]:border-aura"
+          />
+          <p className="text-muted-foreground text-xs">
+            Tiempo de espera antes de realizar llamada automatica si el lead no responde al WhatsApp.
           </p>
         </div>
 
@@ -129,6 +165,52 @@ export function GuardianConfig({
             Antes de enviar el WhatsApp automatico, G1 consulta el CRM:
             si el estado cambio a uno diferente a este valor, significa que
             un asesor ya lo atendio y el flujo se detiene automaticamente.
+          </p>
+        </div>
+
+        {/* Reintentos de Llamada */}
+        <div className="border-border/50 rounded-lg border p-4 space-y-4">
+          <div className="flex items-center gap-2">
+            <RefreshCw className="text-aura h-3.5 w-3.5" />
+            <h3 className="text-sm font-semibold text-foreground">Reintentos de Llamada</h3>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm">Repetir cada</Label>
+              <Badge variant="outline" className="border-aura/30 text-aura font-mono text-xs">
+                {callRetryDays} {callRetryDays === 1 ? "dia" : "dias"}
+              </Badge>
+            </div>
+            <Slider
+              value={[callRetryDays]}
+              onValueChange={([v]) => onCallRetryDaysChange(v)}
+              min={1}
+              max={7}
+              step={1}
+              className="[&_[data-slot=slider-range]]:bg-aura [&_[data-slot=slider-thumb]]:border-aura"
+            />
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm">Maximo de intentos</Label>
+              <Badge variant="outline" className="border-aura/30 text-aura font-mono text-xs">
+                {callRetryMax} {callRetryMax === 1 ? "vez" : "veces"}
+              </Badge>
+            </div>
+            <Slider
+              value={[callRetryMax]}
+              onValueChange={([v]) => onCallRetryMaxChange(v)}
+              min={1}
+              max={5}
+              step={1}
+              className="[&_[data-slot=slider-range]]:bg-aura [&_[data-slot=slider-thumb]]:border-aura"
+            />
+          </div>
+
+          <p className="text-muted-foreground text-xs">
+            Si el lead no contesta, se reintentara la llamada cada {callRetryDays} {callRetryDays === 1 ? "dia" : "dias"} hasta un maximo de {callRetryMax} {callRetryMax === 1 ? "vez" : "veces"}.
           </p>
         </div>
 

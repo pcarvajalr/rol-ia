@@ -7,7 +7,10 @@ import { sendEmailToOwner } from "../modules/email"
 import { validateCredentials } from "../utils/encryption"
 
 const GUARDIAN_DEFAULTS = {
-  tiempoRespuestaLeadSeg: 15,
+  tiempoRespuestaLeadSeg: 420,
+  tiempoLlamadaSeg: 120,
+  callRetryDays: 2,
+  callRetryMax: 3,
   tiempoVerdeMins: 5,
   tiempoAmarilloMins: 5,
   criticalState: "", // vacio = gate desactivado
@@ -35,6 +38,20 @@ async function getGuardianSettings(tenantId: string) {
     tiempoVerdeMins: (guardian?.tiempoVerdeMins as number) || GUARDIAN_DEFAULTS.tiempoVerdeMins,
     tiempoAmarilloMins: (guardian?.tiempoAmarilloMins as number) || GUARDIAN_DEFAULTS.tiempoAmarilloMins,
     criticalState: (guardian?.criticalState as string) || GUARDIAN_DEFAULTS.criticalState,
+  }
+}
+
+async function getCallSettings(tenantId: string) {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { settings: true },
+  })
+  const settings = tenant?.settings as Record<string, unknown> | null
+  const guardian = settings?.guardian as Record<string, unknown> | null
+  return {
+    tiempoLlamadaSeg: (guardian?.tiempoLlamadaSeg as number) || GUARDIAN_DEFAULTS.tiempoLlamadaSeg,
+    callRetryDays: (guardian?.callRetryDays as number) || GUARDIAN_DEFAULTS.callRetryDays,
+    callRetryMax: (guardian?.callRetryMax as number) || GUARDIAN_DEFAULTS.callRetryMax,
   }
 }
 
@@ -262,13 +279,13 @@ async function handleFirstTimeout(
     })
   }
 
-  // 6. Crear segundo Cloud Task
-  const tiempoRespuesta = await getTiempoRespuesta(tenantId)
+  // 6. Crear segundo Cloud Task con tiempoLlamadaSeg
+  const { tiempoLlamadaSeg } = await getCallSettings(tenantId)
   const taskId = `lead-${leadId}-timer2`
   const taskName = await createTask(
     taskId,
     `/internal/lead-timeout/${leadId}`,
-    tiempoRespuesta
+    tiempoLlamadaSeg
   )
 
   await prisma.leadTracking.update({
@@ -351,7 +368,8 @@ async function handleLlamarAhora(
     })
   }
 
-  await endFlow(tenantId, leadId)
+  // No llamar endFlow — el flujo queda abierto esperando el webhook de Vapi
+  // con el resultado de la llamada (contestó / no contestó)
 }
 
 async function handleAgendarCita(
@@ -591,4 +609,153 @@ export async function endFlow(tenantId: string, leadId: string): Promise<void> {
   })
 
   console.log(`[lead-flow] Flow ended for lead ${leadId}`)
+}
+
+export async function handleCallResult(
+  tenantId: string,
+  leadId: string,
+  answered: boolean,
+  endedReason: string
+): Promise<void> {
+  if (answered) {
+    const tipoContestada = await prisma.catTipoEvento.findFirst({ where: { nombre: "Llamada contestada" } })
+    if (tipoContestada) {
+      await prisma.leadEventHistory.create({
+        data: {
+          tenantId,
+          leadId,
+          idTipoEvento: tipoContestada.id,
+          actorIntervencion: "IA",
+          descripcion: `Llamada contestada (${endedReason})`,
+        },
+      })
+    }
+
+    await prisma.leadTracking.update({
+      where: { leadId },
+      data: { callRetriesRemaining: 0 },
+    })
+
+    await stopFlowWithSemaphore(tenantId, leadId)
+    return
+  }
+
+  // No contesto
+  const tipoNoContestada = await prisma.catTipoEvento.findFirst({ where: { nombre: "Llamada no contestada" } })
+  if (tipoNoContestada) {
+    await prisma.leadEventHistory.create({
+      data: {
+        tenantId,
+        leadId,
+        idTipoEvento: tipoNoContestada.id,
+        actorIntervencion: "IA",
+        descripcion: `Llamada no contestada (${endedReason})`,
+      },
+    })
+  }
+
+  // Decrementar reintentos
+  const lead = await prisma.leadTracking.findUnique({
+    where: { leadId },
+    select: { callRetriesRemaining: true },
+  })
+
+  const remaining = (lead?.callRetriesRemaining ?? 1) - 1
+
+  await prisma.leadTracking.update({
+    where: { leadId },
+    data: { callRetriesRemaining: remaining },
+  })
+
+  if (remaining <= 0) {
+    // Reintentos agotados
+    const tipoAgotados = await prisma.catTipoEvento.findFirst({ where: { nombre: "Reintentos agotados" } })
+    if (tipoAgotados) {
+      await prisma.leadEventHistory.create({
+        data: {
+          tenantId,
+          leadId,
+          idTipoEvento: tipoAgotados.id,
+          actorIntervencion: "IA",
+          descripcion: `Reintentos de llamada agotados`,
+        },
+      })
+    }
+
+    await stopFlowWithSemaphore(tenantId, leadId)
+    return
+  }
+
+  // Programar reintento
+  const { callRetryDays } = await getCallSettings(tenantId)
+  const delaySec = callRetryDays * 24 * 60 * 60
+  const taskId = `lead-${leadId}-retry-${remaining}`
+  const taskName = await createTask(
+    taskId,
+    `/internal/lead-call-retry/${leadId}`,
+    delaySec
+  )
+
+  await prisma.leadTracking.update({
+    where: { leadId },
+    data: { flowJobId: taskName },
+  })
+
+  const tipoProgramado = await prisma.catTipoEvento.findFirst({ where: { nombre: "Reintento programado" } })
+  if (tipoProgramado) {
+    await prisma.leadEventHistory.create({
+      data: {
+        tenantId,
+        leadId,
+        idTipoEvento: tipoProgramado.id,
+        actorIntervencion: "IA",
+        descripcion: `Reintento programado en ${callRetryDays} dias (${remaining} restantes)`,
+      },
+    })
+  }
+
+  console.log(`[lead-flow] Retry scheduled for lead ${leadId} in ${callRetryDays} days (${remaining} remaining)`)
+}
+
+export async function handleCallRetry(leadId: string, tenantId: string): Promise<void> {
+  const lead = await prisma.leadTracking.findUnique({
+    where: { leadId },
+    select: { telefono: true, nombreLead: true },
+  })
+
+  if (!lead || !lead.telefono) {
+    console.error(`[lead-flow] Cannot retry call for lead ${leadId}: no phone number`)
+    return
+  }
+
+  // Validar credenciales VAPI
+  try {
+    await validateCredentials(tenantId, "vapi", ["assistant_id", "auth_token"])
+  } catch (error) {
+    console.error(`[lead-flow] VAPI credentials error for tenant ${tenantId}:`, error)
+    await handleCredentialError(leadId, tenantId, lead.nombreLead, "vapi")
+    return
+  }
+
+  // Hacer llamada directa (sin WhatsApp)
+  try {
+    await makeOutboundCall(tenantId, lead.telefono)
+  } catch (error) {
+    console.error(`[lead-flow] VAPI retry call error for lead ${leadId}:`, error)
+  }
+
+  const tipoLlamada = await prisma.catTipoEvento.findFirst({ where: { nombre: "Llamada" } })
+  if (tipoLlamada) {
+    await prisma.leadEventHistory.create({
+      data: {
+        tenantId,
+        leadId,
+        idTipoEvento: tipoLlamada.id,
+        actorIntervencion: "IA",
+        descripcion: `Reintento de llamada VAPI a ${lead.telefono}`,
+      },
+    })
+  }
+
+  console.log(`[lead-flow] Retry call made for lead ${leadId} to ${lead.telefono}`)
 }
