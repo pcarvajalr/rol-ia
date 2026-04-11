@@ -7,7 +7,7 @@ import { sendEmailToOwner } from "../modules/email"
 import { validateCredentials } from "../utils/encryption"
 
 const GUARDIAN_DEFAULTS = {
-  tiempoRespuestaLeadSeg: 420,
+  tiempoRespuestaLeadSeg: 120,
   tiempoLlamadaSeg: 120,
   callRetryDays: 2,
   callRetryMax: 3,

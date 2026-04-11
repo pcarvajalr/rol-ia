@@ -15,7 +15,7 @@ const GUARDIAN_DEFAULTS = {
   slaMinutes: 7,
   criticalState: "cold-lead",
   doubleTouchMinutes: 2,
-  tiempoRespuestaLeadSeg: 420,
+  tiempoRespuestaLeadSeg: 120,
   tiempoLlamadaSeg: 120,
   callRetryDays: 2,
   callRetryMax: 3,

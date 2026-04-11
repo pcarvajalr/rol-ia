@@ -9,6 +9,7 @@ dist/
 apps/api/.env
 apps/web/.env
 .DS_Store
+docs/
 
 # Compiled JS artifacts
 apps/web/src/**/*.js
