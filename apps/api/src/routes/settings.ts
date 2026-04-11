@@ -12,6 +12,7 @@ const settingsRouter = new Hono<{
 }>()
 
 const GUARDIAN_DEFAULTS = {
+  tipoProceso: "automatizado",
   slaMinutes: 7,
   criticalState: "cold-lead",
   doubleTouchMinutes: 2,
@@ -115,6 +116,13 @@ settingsRouter.put("/guardian", async (c) => {
       }
     }
 
+    // Validate tipoProceso
+    if (body.tipoProceso !== undefined) {
+      if (!["automatizado", "directo"].includes(body.tipoProceso)) {
+        return c.json({ error: "tipoProceso debe ser 'automatizado' o 'directo'" }, 400)
+      }
+    }
+
     // Get current settings to merge
     const tenant = await prisma.tenant.findUnique({
       where: { id: tenantId },
@@ -126,6 +134,7 @@ settingsRouter.put("/guardian", async (c) => {
 
     // Only pick known guardian keys from body
     const guardianUpdate: Record<string, unknown> = { ...currentGuardian }
+    if (body.tipoProceso !== undefined) guardianUpdate.tipoProceso = body.tipoProceso
     if (body.slaMinutes !== undefined) guardianUpdate.slaMinutes = Number(body.slaMinutes)
     if (body.criticalState !== undefined) guardianUpdate.criticalState = body.criticalState
     if (body.doubleTouchMinutes !== undefined) guardianUpdate.doubleTouchMinutes = Number(body.doubleTouchMinutes)

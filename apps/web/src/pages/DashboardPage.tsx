@@ -155,6 +155,7 @@ export function DashboardPage() {
   const [callRetryMax, setCallRetryMax] = useState(3)
   const [tiempoVerdeMins, setTiempoVerdeMins] = useState(5)
   const [tiempoAmarilloMins, setTiempoAmarilloMins] = useState(5)
+  const [tipoProceso, setTipoProceso] = useState("automatizado")
   const [isSavingGuardian, setIsSavingGuardian] = useState(false)
   const [guardianLoaded, setGuardianLoaded] = useState(false)
 
@@ -176,6 +177,7 @@ export function DashboardPage() {
           if (data.callRetryMax) setCallRetryMax(data.callRetryMax)
           if (data.tiempoVerdeMins) setTiempoVerdeMins(data.tiempoVerdeMins)
           if (data.tiempoAmarilloMins) setTiempoAmarilloMins(data.tiempoAmarilloMins)
+          if (data.tipoProceso) setTipoProceso(data.tipoProceso)
         }
       } catch (err) {
         console.error("Failed to load guardian settings:", err)
@@ -206,6 +208,7 @@ export function DashboardPage() {
           callRetryMax,
           tiempoVerdeMins,
           tiempoAmarilloMins,
+          tipoProceso,
         }),
       })
       if (!res.ok) throw new Error("Failed to save")
@@ -479,6 +482,8 @@ export function DashboardPage() {
               defaultOpen={true}
             >
               <GuardianConfig
+                tipoProceso={tipoProceso}
+                onTipoProcesoChange={setTipoProceso}
                 slaMinutes={slaMinutes}
                 onSlaChange={setSlaMinutes}
                 criticalState={criticalState}

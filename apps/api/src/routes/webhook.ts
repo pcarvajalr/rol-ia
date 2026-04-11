@@ -1,7 +1,7 @@
 import { Hono } from "hono"
 import { prisma } from "../db/client"
 import { validateCredentials } from "../utils/encryption"
-import { parseClientifyPayload } from "../modules/clientify"
+import { parseClientifyPayload, syncTenantVendedores } from "../modules/clientify"
 import { sendEmailToOwner } from "../modules/email"
 import { parseCalcomWebhook, validateCalcomSignature } from "../modules/calcom"
 import { sendTextMessage } from "../modules/whatsapp"
@@ -153,6 +153,37 @@ async function logWebhookRequest(data: {
   }
 }
 
+async function resolveVendedor(
+  tenantId: string,
+  ownerEmail: string | null
+): Promise<string | null> {
+  if (!ownerEmail) return null
+
+  try {
+    // 1. Buscar en BD
+    const existing = await prisma.vendedor.findUnique({
+      where: { tenantId_email: { tenantId, email: ownerEmail } },
+    })
+    if (existing) return existing.id
+
+    // 2. Sync desde Clientify API
+    const credentials = await validateCredentials(tenantId, "clientify", ["api_token"])
+    const synced = await syncTenantVendedores(tenantId, credentials.api_token)
+
+    const found = synced.find((v) => v.email === ownerEmail)
+    if (found) return found.id
+
+    // 3. Fallback: crear vendedor solo con email
+    const fallback = await prisma.vendedor.create({
+      data: { tenantId, email: ownerEmail, nombre: ownerEmail },
+    })
+    return fallback.id
+  } catch (error) {
+    console.error(`[webhook] Error resolviendo vendedor ${ownerEmail}:`, error)
+    return null
+  }
+}
+
 async function handleClientifyWebhook(tenantId: string, body: unknown) {
   // Parsear payload
   const lead = parseClientifyPayload(body)
@@ -289,6 +320,9 @@ async function handleClientifyWebhook(tenantId: string, body: unknown) {
   const guardianJson = (settingsJson.guardian as Record<string, unknown>) ?? {}
   const callRetryMax = (guardianJson.callRetryMax as number) || 3
 
+  // Resolver vendedor
+  const vendedorId = await resolveVendedor(tenantId, lead.owner)
+
   // Buscar tipo de evento "Lead ingreso"
   const tipoIngreso = await prisma.catTipoEvento.findFirst({
     where: { nombre: "Lead ingreso" },
@@ -311,6 +345,7 @@ async function handleClientifyWebhook(tenantId: string, body: unknown) {
       idEstado: estadoFrio.id,
       crmStatusInicial: lead.status?.toLowerCase() || null,
       callRetriesRemaining: callRetryMax + 1,
+      vendedorId,
     },
   })
 

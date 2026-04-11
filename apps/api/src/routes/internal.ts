@@ -1,6 +1,6 @@
 import { Hono } from "hono"
 import { prisma } from "../db/client"
-import { getLastEvent, handleTimeout, handleCallRetry } from "../services/lead-flow"
+import { getLastEvent, handleTimeout, handleCallRetry, notifyVendedor } from "../services/lead-flow"
 import { sendTextMessage } from "../modules/whatsapp"
 
 const internalRouter = new Hono()
@@ -121,6 +121,44 @@ internalRouter.post("/cita-reminder/:citaId", async (c) => {
     return c.json({ error: "Failed to send reminder" }, 500)
   }
 
+  return c.json({ ok: true })
+})
+
+// POST /internal/lead-semaphore-alert/:leadId?color=yellow|red
+internalRouter.post("/lead-semaphore-alert/:leadId", async (c) => {
+  const { leadId } = c.req.param()
+  const color = c.req.query("color")
+
+  const taskHeader = c.req.header("X-CloudTasks-TaskName")
+  if (process.env.NODE_ENV === "production" && !taskHeader) {
+    return c.json({ error: "Unauthorized" }, 403)
+  }
+
+  if (!color || !["yellow", "red"].includes(color)) {
+    return c.json({ error: "color query param required (yellow|red)" }, 400)
+  }
+
+  const lead = await prisma.leadTracking.findUnique({
+    where: { leadId },
+    select: { leadId: true, tenantId: true, flowJobId: true },
+  })
+
+  if (!lead) {
+    return c.json({ error: "Lead no encontrado" }, 404)
+  }
+
+  if (!lead.flowJobId) {
+    console.log(`[internal] Lead ${leadId} ya no tiene flow activo, semáforo ${color} omitido`)
+    return c.json({ ok: true, skipped: true })
+  }
+
+  const accion = color === "yellow"
+    ? "Alerta: el lead cambió a semáforo amarillo"
+    : "Alerta urgente: el lead cambió a semáforo rojo"
+
+  await notifyVendedor(lead.tenantId, leadId, accion)
+
+  console.log(`[internal] Semaphore alert ${color} sent for lead ${leadId}`)
   return c.json({ ok: true })
 })
 

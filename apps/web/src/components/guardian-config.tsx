@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Settings2, Loader2, RefreshCw, AlertTriangle, Info } from "lucide-react"
+import { Settings2, Loader2, RefreshCw, AlertTriangle, Info, Users, Bot } from "lucide-react"
 
 /* ───── Linea de tiempo visual ───── */
 
@@ -224,6 +224,8 @@ function TimelineVisualization({
 }
 
 interface GuardianConfigProps {
+  tipoProceso: string
+  onTipoProcesoChange: (value: string) => void
   slaMinutes: number
   onSlaChange: (value: number) => void
   criticalState: string
@@ -247,6 +249,8 @@ interface GuardianConfigProps {
 }
 
 export function GuardianConfig({
+  tipoProceso,
+  onTipoProcesoChange,
   slaMinutes,
   onSlaChange,
   criticalState,
@@ -279,6 +283,45 @@ export function GuardianConfig({
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
+        {/* Tipo de Proceso de Venta */}
+        <div className="flex flex-col gap-3">
+          <Label className="text-foreground text-sm font-medium">
+            Tipo de Proceso de Venta
+          </Label>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => onTipoProcesoChange("automatizado")}
+              className={`flex flex-col items-center gap-2 rounded-lg border p-4 transition-colors ${
+                tipoProceso === "automatizado"
+                  ? "border-aura bg-aura/10 text-aura"
+                  : "border-border/50 bg-secondary/50 text-muted-foreground hover:border-border"
+              }`}
+            >
+              <Bot className="h-5 w-5" />
+              <span className="text-xs font-medium">Asistencia Automatizada</span>
+              <span className="text-[10px] text-center leading-tight opacity-70">
+                WhatsApp y llamadas automáticas al lead
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onTipoProcesoChange("directo")}
+              className={`flex flex-col items-center gap-2 rounded-lg border p-4 transition-colors ${
+                tipoProceso === "directo"
+                  ? "border-aura bg-aura/10 text-aura"
+                  : "border-border/50 bg-secondary/50 text-muted-foreground hover:border-border"
+              }`}
+            >
+              <Users className="h-5 w-5" />
+              <span className="text-xs font-medium">Asistencia Directa</span>
+              <span className="text-[10px] text-center leading-tight opacity-70">
+                Notificaciones al vendedor asignado
+              </span>
+            </button>
+          </div>
+        </div>
+
         {/* Tiempo de espera WhatsApp */}
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">

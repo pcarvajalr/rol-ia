@@ -36,6 +36,7 @@ model Tenant {
   ventasProyecciones VentasProyeccion[]
   crmStateMappings   CrmStateMapping[]
   webhookRequestLogs WebhookRequestLog[]
+  vendedores         Vendedor[]
 
   @@map("tenants")
 }
@@ -97,6 +98,22 @@ model CatEstadoGestion {
 
 // === LEADS ===
 
+model Vendedor {
+  id        String   @id @default(uuid())
+  tenantId  String   @map("tenant_id") @db.Uuid
+  email     String
+  nombre    String
+  telefono  String?
+  creadoEn  DateTime @default(now()) @map("creado_en")
+
+  tenant    Tenant         @relation(fields: [tenantId], references: [id])
+  leads     LeadTracking[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@map("vendedores")
+}
+
 model LeadTracking {
   leadId        String   @id @default(uuid()) @map("lead_id")
   tenantId      String   @map("tenant_id") @db.Uuid
@@ -112,12 +129,17 @@ model LeadTracking {
   semaphoreTimeMs  BigInt?  @map("semaphore_time_ms")
   semaphoreColor   String?  @map("semaphore_color")
   callRetriesRemaining Int?     @map("call_retries_remaining")
+  vendedorId           String?  @map("vendedor_id")
+  campania             String?
+  semaphoreYellowTaskId  String?  @map("semaphore_yellow_task_id")
+  semaphoreRedTaskId     String?  @map("semaphore_red_task_id")
 
   tenant      Tenant             @relation(fields: [tenantId], references: [id])
   estado      CatEstadoGestion?  @relation(fields: [idEstado], references: [id])
   eventos     LeadEventHistory[]
   citas       CitaAgendada[]
   webhookLogs WebhookRequestLog[]
+  vendedor    Vendedor? @relation(fields: [vendedorId], references: [id])
 
   @@unique([tenantId, externalId, fuente])
   @@index([tenantId])

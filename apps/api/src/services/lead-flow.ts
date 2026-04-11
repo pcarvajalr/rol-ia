@@ -3,10 +3,11 @@ import { createTask, cancelTask } from "./task-scheduler"
 import { queryContactStatus } from "../modules/clientify"
 import { sendTemplate, sendTextMessage, getTemplateStructure } from "../modules/whatsapp"
 import { makeOutboundCall } from "../modules/vapi"
-import { sendEmailToOwner } from "../modules/email"
+import { sendEmailToOwner, sendEmail } from "../modules/email"
 import { validateCredentials } from "../utils/encryption"
 
 const GUARDIAN_DEFAULTS = {
+  tipoProceso: "automatizado",
   tiempoRespuestaLeadSeg: 120,
   tiempoLlamadaSeg: 120,
   callRetryDays: 2,
@@ -55,6 +56,103 @@ async function getCallSettings(tenantId: string) {
   }
 }
 
+async function getTipoProceso(tenantId: string): Promise<string> {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { settings: true },
+  })
+  const settings = tenant?.settings as Record<string, unknown> | null
+  const guardian = settings?.guardian as Record<string, unknown> | null
+  return (guardian?.tipoProceso as string) || GUARDIAN_DEFAULTS.tipoProceso
+}
+
+export async function notifyVendedor(
+  tenantId: string,
+  leadId: string,
+  accionTexto: string
+): Promise<void> {
+  const lead = await prisma.leadTracking.findUnique({
+    where: { leadId },
+    select: { nombreLead: true, telefono: true, vendedorId: true },
+  })
+
+  if (!lead) return
+
+  let vendedorEmail: string | null = null
+  let vendedorTelefono: string | null = null
+
+  if (lead.vendedorId) {
+    const vendedor = await prisma.vendedor.findUnique({
+      where: { id: lead.vendedorId },
+    })
+    if (vendedor) {
+      vendedorEmail = vendedor.email
+      vendedorTelefono = vendedor.telefono
+    }
+  }
+
+  const nombreLead = lead.nombreLead
+  const telefonoLead = lead.telefono || "sin teléfono"
+
+  // 1. Intentar WhatsApp al vendedor
+  if (vendedorTelefono) {
+    try {
+      let enviado = false
+      try {
+        const templateInfo = await getTemplateStructure(tenantId, "rol_notifica_vendedor")
+        if (templateInfo.category === "UTILITY" && templateInfo.status === "APPROVED") {
+          await sendTemplate(tenantId, vendedorTelefono, "rol_notifica_vendedor", "es", {
+            "1": nombreLead,
+            "2": telefonoLead,
+            "3": accionTexto,
+          })
+          enviado = true
+        }
+      } catch {
+        // Template no existe, usar fallback texto
+      }
+
+      if (!enviado) {
+        await sendTextMessage(
+          tenantId,
+          vendedorTelefono,
+          `[Rol.IA] ${accionTexto}\nLead: ${nombreLead}\nTeléfono: ${telefonoLead}`
+        )
+      }
+
+      console.log(`[lead-flow] Notificación WhatsApp enviada al vendedor ${vendedorTelefono} para lead ${leadId}`)
+      return
+    } catch (error) {
+      console.error(`[lead-flow] Error enviando WhatsApp al vendedor para lead ${leadId}:`, error)
+    }
+  }
+
+  // 2. Fallback: email al vendedor
+  if (vendedorEmail) {
+    try {
+      const sent = await sendEmail(tenantId, {
+        to: vendedorEmail,
+        subject: `[Rol.IA] ${accionTexto}`,
+        html: `<p><strong>${accionTexto}</strong></p><p>Lead: ${nombreLead}<br>Teléfono: ${telefonoLead}</p>`,
+      })
+      if (sent) {
+        console.log(`[lead-flow] Notificación email enviada al vendedor ${vendedorEmail} para lead ${leadId}`)
+        return
+      }
+    } catch (error) {
+      console.error(`[lead-flow] Error enviando email al vendedor para lead ${leadId}:`, error)
+    }
+  }
+
+  // 3. Fallback: email al owner del tenant
+  await sendEmailToOwner(
+    tenantId,
+    `[Rol.IA] ${accionTexto}`,
+    `<p><strong>${accionTexto}</strong></p><p>Lead: ${nombreLead}<br>Teléfono: ${telefonoLead}</p>`
+  )
+  console.log(`[lead-flow] Notificación fallback email al owner para lead ${leadId}`)
+}
+
 function calculateSemaphoreColor(
   timeMs: number,
   tiempoVerdeMins: number,
@@ -76,6 +174,7 @@ export async function getLastEvent(leadId: string, tenantId: string) {
 }
 
 export async function startFlow(tenantId: string, leadId: string): Promise<void> {
+  const tipoProceso = await getTipoProceso(tenantId)
   const tiempoRespuesta = await getTiempoRespuesta(tenantId)
 
   const taskId = `lead-${leadId}-timer1`
@@ -90,7 +189,39 @@ export async function startFlow(tenantId: string, leadId: string): Promise<void>
     data: { flowJobId: taskName },
   })
 
-  console.log(`[lead-flow] Flow started for lead ${leadId}, timer: ${tiempoRespuesta}s`)
+  if (tipoProceso === "directo") {
+    await notifyVendedor(tenantId, leadId, "Nuevo lead ingresó al sistema")
+
+    const { tiempoVerdeMins, tiempoAmarilloMins } = await getGuardianSettings(tenantId)
+
+    const yellowDelaySec = tiempoVerdeMins * 60
+    const yellowTaskId = `lead-${leadId}-semaphore-yellow`
+    const yellowTaskName = await createTask(
+      yellowTaskId,
+      `/internal/lead-semaphore-alert/${leadId}?color=yellow`,
+      yellowDelaySec
+    )
+
+    const redDelaySec = (tiempoVerdeMins + tiempoAmarilloMins) * 60
+    const redTaskId = `lead-${leadId}-semaphore-red`
+    const redTaskName = await createTask(
+      redTaskId,
+      `/internal/lead-semaphore-alert/${leadId}?color=red`,
+      redDelaySec
+    )
+
+    await prisma.leadTracking.update({
+      where: { leadId },
+      data: {
+        semaphoreYellowTaskId: yellowTaskName,
+        semaphoreRedTaskId: redTaskName,
+      },
+    })
+
+    console.log(`[lead-flow] Flow DIRECTO started for lead ${leadId}, timer: ${tiempoRespuesta}s, yellow: ${yellowDelaySec}s, red: ${redDelaySec}s`)
+  } else {
+    console.log(`[lead-flow] Flow started for lead ${leadId}, timer: ${tiempoRespuesta}s`)
+  }
 }
 
 export async function handleTimeout(leadId: string, tenantId: string): Promise<void> {
@@ -108,10 +239,24 @@ export async function handleTimeout(leadId: string, tenantId: string): Promise<v
 
   if (!lead) return
 
+  const tipoProceso = await getTipoProceso(tenantId)
+
+  if (tipoProceso === "directo") {
+    await handleTimeoutDirecto(leadId, tenantId, lead, lastEvent)
+  } else {
+    await handleTimeoutAutomatizado(leadId, tenantId, lead, lastEvent)
+  }
+}
+
+async function handleTimeoutAutomatizado(
+  leadId: string,
+  tenantId: string,
+  lead: { nombreLead: string; telefono: string | null; externalId: string | null; email: string | null },
+  lastEvent: NonNullable<Awaited<ReturnType<typeof getLastEvent>>>
+): Promise<void> {
   if (lastEvent.tipoEvento?.nombre === "Lead ingreso") {
     await handleFirstTimeout(leadId, tenantId, lead)
   } else if (lastEvent.tipoEvento?.nombre === "WhatsApp") {
-    // Segundo timeout: llamar VAPI
     try {
       await validateCredentials(tenantId, "vapi", ["assistant_id", "auth_token"])
     } catch (error) {
@@ -138,9 +283,118 @@ export async function handleTimeout(leadId: string, tenantId: string): Promise<v
         },
       })
     }
+  }
+}
 
-    // No detener semáforo — solo las acciones automáticas terminaron
-    // El lead sigue activo en el semáforo hasta que el CRM cambie el status
+async function handleTimeoutDirecto(
+  leadId: string,
+  tenantId: string,
+  lead: { nombreLead: string; telefono: string | null; externalId: string | null; email: string | null },
+  lastEvent: NonNullable<Awaited<ReturnType<typeof getLastEvent>>>
+): Promise<void> {
+  if (lastEvent.tipoEvento?.nombre === "Lead ingreso") {
+    await notifyVendedor(tenantId, leadId, "Es momento de enviar WhatsApp al lead")
+
+    const tipoWhatsApp = await prisma.catTipoEvento.findFirst({ where: { nombre: "WhatsApp" } })
+    if (tipoWhatsApp) {
+      await prisma.leadEventHistory.create({
+        data: {
+          tenantId,
+          leadId,
+          idTipoEvento: tipoWhatsApp.id,
+          actorIntervencion: "Vendedor",
+          descripcion: "Notificación al vendedor: enviar WhatsApp",
+        },
+      })
+    }
+
+    const { tiempoLlamadaSeg } = await getCallSettings(tenantId)
+    const taskId = `lead-${leadId}-timer2`
+    const taskName = await createTask(
+      taskId,
+      `/internal/lead-timeout/${leadId}`,
+      tiempoLlamadaSeg
+    )
+
+    await prisma.leadTracking.update({
+      where: { leadId },
+      data: { flowJobId: taskName },
+    })
+
+    console.log(`[lead-flow] DIRECTO: notificación WhatsApp enviada, timer2 creado para lead ${leadId}`)
+  } else if (lastEvent.tipoEvento?.nombre === "WhatsApp") {
+    await notifyVendedor(tenantId, leadId, "Es momento de llamar al lead")
+
+    const tipoLlamada = await prisma.catTipoEvento.findFirst({ where: { nombre: "Llamada" } })
+    if (tipoLlamada) {
+      await prisma.leadEventHistory.create({
+        data: {
+          tenantId,
+          leadId,
+          idTipoEvento: tipoLlamada.id,
+          actorIntervencion: "Vendedor",
+          descripcion: "Notificación al vendedor: llamar al lead",
+        },
+      })
+    }
+
+    const { callRetryDays } = await getCallSettings(tenantId)
+    const delaySec = callRetryDays * 24 * 60 * 60
+
+    const lead2 = await prisma.leadTracking.findUnique({
+      where: { leadId },
+      select: { callRetriesRemaining: true },
+    })
+
+    const remaining = (lead2?.callRetriesRemaining ?? 1) - 1
+    await prisma.leadTracking.update({
+      where: { leadId },
+      data: { callRetriesRemaining: remaining },
+    })
+
+    if (remaining > 0) {
+      const retryTaskId = `lead-${leadId}-retry-${remaining}`
+      const retryTaskName = await createTask(
+        retryTaskId,
+        `/internal/lead-call-retry/${leadId}`,
+        delaySec
+      )
+
+      await prisma.leadTracking.update({
+        where: { leadId },
+        data: { flowJobId: retryTaskName },
+      })
+
+      const tipoProgramado = await prisma.catTipoEvento.findFirst({ where: { nombre: "Reintento programado" } })
+      if (tipoProgramado) {
+        await prisma.leadEventHistory.create({
+          data: {
+            tenantId,
+            leadId,
+            idTipoEvento: tipoProgramado.id,
+            actorIntervencion: "Vendedor",
+            descripcion: `Reintento programado en ${callRetryDays} dias (${remaining} restantes)`,
+          },
+        })
+      }
+    } else {
+      const tipoAgotados = await prisma.catTipoEvento.findFirst({ where: { nombre: "Reintentos agotados" } })
+      if (tipoAgotados) {
+        await prisma.leadEventHistory.create({
+          data: {
+            tenantId,
+            leadId,
+            idTipoEvento: tipoAgotados.id,
+            actorIntervencion: "Vendedor",
+            descripcion: "Reintentos de llamada agotados",
+          },
+        })
+      }
+
+      await stopFlowWithSemaphore(tenantId, leadId)
+    }
+
+    console.log(`[lead-flow] DIRECTO: notificación llamada enviada para lead ${leadId}`)
   }
 }
 
@@ -596,16 +850,36 @@ export async function stopFlowWithSemaphore(tenantId: string, leadId: string): P
 export async function endFlow(tenantId: string, leadId: string): Promise<void> {
   const lead = await prisma.leadTracking.findUnique({
     where: { leadId },
-    select: { flowJobId: true },
+    select: { flowJobId: true, semaphoreYellowTaskId: true, semaphoreRedTaskId: true },
   })
 
   if (lead?.flowJobId) {
     await cancelTask(lead.flowJobId)
   }
 
+  if (lead?.semaphoreYellowTaskId) {
+    try {
+      await cancelTask(lead.semaphoreYellowTaskId)
+    } catch (error) {
+      console.error(`[lead-flow] Error cancelling yellow semaphore task for lead ${leadId}:`, error)
+    }
+  }
+
+  if (lead?.semaphoreRedTaskId) {
+    try {
+      await cancelTask(lead.semaphoreRedTaskId)
+    } catch (error) {
+      console.error(`[lead-flow] Error cancelling red semaphore task for lead ${leadId}:`, error)
+    }
+  }
+
   await prisma.leadTracking.update({
     where: { leadId },
-    data: { flowJobId: null },
+    data: {
+      flowJobId: null,
+      semaphoreYellowTaskId: null,
+      semaphoreRedTaskId: null,
+    },
   })
 
   console.log(`[lead-flow] Flow ended for lead ${leadId}`)
@@ -728,7 +1002,29 @@ export async function handleCallRetry(leadId: string, tenantId: string): Promise
     return
   }
 
-  // Validar credenciales VAPI
+  const tipoProceso = await getTipoProceso(tenantId)
+
+  if (tipoProceso === "directo") {
+    await notifyVendedor(tenantId, leadId, "Recordatorio: reintentar llamada al lead")
+
+    const tipoLlamada = await prisma.catTipoEvento.findFirst({ where: { nombre: "Llamada" } })
+    if (tipoLlamada) {
+      await prisma.leadEventHistory.create({
+        data: {
+          tenantId,
+          leadId,
+          idTipoEvento: tipoLlamada.id,
+          actorIntervencion: "Vendedor",
+          descripcion: `Notificación reintento de llamada a ${lead.telefono}`,
+        },
+      })
+    }
+
+    console.log(`[lead-flow] DIRECTO: retry notification sent for lead ${leadId}`)
+    return
+  }
+
+  // Modo automatizado: lógica existente
   try {
     await validateCredentials(tenantId, "vapi", ["assistant_id", "auth_token"])
   } catch (error) {
@@ -737,7 +1033,6 @@ export async function handleCallRetry(leadId: string, tenantId: string): Promise
     return
   }
 
-  // Hacer llamada directa (sin WhatsApp)
   try {
     await makeOutboundCall(tenantId, lead.telefono)
   } catch (error) {
