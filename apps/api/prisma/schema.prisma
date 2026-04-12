@@ -155,6 +155,7 @@ model LeadEventHistory {
   actorIntervencion  String   @map("actor_intervencion")
   descripcion        String?
   timestamp          DateTime @default(now())
+  guardian           String?
 
   tenant     Tenant         @relation(fields: [tenantId], references: [id])
   lead       LeadTracking   @relation(fields: [leadId], references: [leadId])

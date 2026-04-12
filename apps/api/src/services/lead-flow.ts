@@ -192,6 +192,14 @@ export async function startFlow(tenantId: string, leadId: string): Promise<void>
   if (tipoProceso === "directo") {
     await notifyVendedor(tenantId, leadId, "Nuevo lead ingresó al sistema")
 
+    // Evento forense: semáforo verde
+    const tipoVerde = await prisma.catTipoEvento.findFirst({ where: { nombre: "Semáforo verde" } })
+    if (tipoVerde) {
+      await prisma.leadEventHistory.create({
+        data: { tenantId, leadId, idTipoEvento: tipoVerde.id, actorIntervencion: "IA", guardian: "G1", descripcion: "Nuevo lead asignado, vendedor notificado" },
+      })
+    }
+
     const { tiempoVerdeMins, tiempoAmarilloMins } = await getGuardianSettings(tenantId)
 
     const yellowDelaySec = tiempoVerdeMins * 60
@@ -283,6 +291,14 @@ async function handleTimeoutAutomatizado(
         },
       })
     }
+
+    // Evento forense: llamada rescate
+    const tipoLlamadaRescate = await prisma.catTipoEvento.findFirst({ where: { nombre: "Llamada rescate" } })
+    if (tipoLlamadaRescate) {
+      await prisma.leadEventHistory.create({
+        data: { tenantId, leadId, idTipoEvento: tipoLlamadaRescate.id, actorIntervencion: "IA", guardian: "G7", descripcion: `Llamada VAPI de rescate a ${lead.telefono}` },
+      })
+    }
   }
 }
 
@@ -305,6 +321,14 @@ async function handleTimeoutDirecto(
           actorIntervencion: "Vendedor",
           descripcion: "Notificación al vendedor: enviar WhatsApp",
         },
+      })
+    }
+
+    // Evento forense: rescate WhatsApp (directo)
+    const tipoRescateD = await prisma.catTipoEvento.findFirst({ where: { nombre: "Rescate WhatsApp" } })
+    if (tipoRescateD) {
+      await prisma.leadEventHistory.create({
+        data: { tenantId, leadId, idTipoEvento: tipoRescateD.id, actorIntervencion: "IA", guardian: "G1", descripcion: "Notificación al vendedor: enviar WhatsApp (rescate)" },
       })
     }
 
@@ -333,6 +357,7 @@ async function handleTimeoutDirecto(
           leadId,
           idTipoEvento: tipoLlamada.id,
           actorIntervencion: "Vendedor",
+          guardian: "G7",
           descripcion: "Notificación al vendedor: llamar al lead",
         },
       })
@@ -373,6 +398,7 @@ async function handleTimeoutDirecto(
             leadId,
             idTipoEvento: tipoProgramado.id,
             actorIntervencion: "Vendedor",
+            guardian: "G7",
             descripcion: `Reintento programado en ${callRetryDays} dias (${remaining} restantes)`,
           },
         })
@@ -386,6 +412,7 @@ async function handleTimeoutDirecto(
             leadId,
             idTipoEvento: tipoAgotados.id,
             actorIntervencion: "Vendedor",
+            guardian: "G7",
             descripcion: "Reintentos de llamada agotados",
           },
         })
@@ -533,6 +560,14 @@ async function handleFirstTimeout(
     })
   }
 
+  // Evento forense: rescate WhatsApp
+  const tipoRescate = await prisma.catTipoEvento.findFirst({ where: { nombre: "Rescate WhatsApp" } })
+  if (tipoRescate) {
+    await prisma.leadEventHistory.create({
+      data: { tenantId, leadId, idTipoEvento: tipoRescate.id, actorIntervencion: "IA", guardian: "G1", descripcion: `Rescate WhatsApp (${metodoEnvio}) enviado a ${lead.telefono}` },
+    })
+  }
+
   // 6. Crear segundo Cloud Task con tiempoLlamadaSeg
   const { tiempoLlamadaSeg } = await getCallSettings(tenantId)
   const taskId = `lead-${leadId}-timer2`
@@ -622,6 +657,22 @@ async function handleLlamarAhora(
     })
   }
 
+  // Evento forense: preferencia llamada (G1)
+  const tipoPrefLlamada = await prisma.catTipoEvento.findFirst({ where: { nombre: "Preferencia llamada" } })
+  if (tipoPrefLlamada) {
+    await prisma.leadEventHistory.create({
+      data: { tenantId, leadId, idTipoEvento: tipoPrefLlamada.id, actorIntervencion: "IA", guardian: "G1", descripcion: "Cliente eligió: Llamar Ahora" },
+    })
+  }
+
+  // Evento forense: llamada rescate (G7)
+  const tipoLlamadaRescateB = await prisma.catTipoEvento.findFirst({ where: { nombre: "Llamada rescate" } })
+  if (tipoLlamadaRescateB) {
+    await prisma.leadEventHistory.create({
+      data: { tenantId, leadId, idTipoEvento: tipoLlamadaRescateB.id, actorIntervencion: "IA", guardian: "G7", descripcion: "Llamada VAPI solicitada por lead (rescate)" },
+    })
+  }
+
   // No llamar endFlow — el flujo queda abierto esperando el webhook de Vapi
   // con el resultado de la llamada (contestó / no contestó)
 }
@@ -679,6 +730,14 @@ async function handleAgendarCita(
     })
   }
 
+  // Evento forense: preferencia agendamiento
+  const tipoPrefAgenda = await prisma.catTipoEvento.findFirst({ where: { nombre: "Preferencia agendamiento" } })
+  if (tipoPrefAgenda) {
+    await prisma.leadEventHistory.create({
+      data: { tenantId, leadId, idTipoEvento: tipoPrefAgenda.id, actorIntervencion: "IA", guardian: "G1", descripcion: "Cliente eligió: Agendar Cita" },
+    })
+  }
+
   // 4. Crear registro de cita agendada
   // horaAgenda queda null — se actualiza cuando Cal.com envía el webhook de confirmación
   await prisma.citaAgendada.create({
@@ -729,6 +788,14 @@ async function handleSeguirEnChat(
     })
   }
 
+  // Evento forense: preferencia chat
+  const tipoPrefChat = await prisma.catTipoEvento.findFirst({ where: { nombre: "Preferencia chat" } })
+  if (tipoPrefChat) {
+    await prisma.leadEventHistory.create({
+      data: { tenantId, leadId, idTipoEvento: tipoPrefChat.id, actorIntervencion: "IA", guardian: "G1", descripcion: "Cliente eligió: Seguir en el Chat" },
+    })
+  }
+
   await endFlow(tenantId, leadId)
 }
 
@@ -753,6 +820,14 @@ async function handleNoContactar(
         actorIntervencion: "IA",
         descripcion: "No contactar",
       },
+    })
+  }
+
+  // Evento forense: opt-out
+  const tipoOptOut = await prisma.catTipoEvento.findFirst({ where: { nombre: "Opt-out" } })
+  if (tipoOptOut) {
+    await prisma.leadEventHistory.create({
+      data: { tenantId, leadId, idTipoEvento: tipoOptOut.id, actorIntervencion: "IA", guardian: "G1", descripcion: "Cliente solicitó no ser contactado" },
     })
   }
 
@@ -900,6 +975,7 @@ export async function handleCallResult(
           leadId,
           idTipoEvento: tipoContestada.id,
           actorIntervencion: "IA",
+          guardian: "G7",
           descripcion: `Llamada contestada (${endedReason})`,
         },
       })
@@ -923,6 +999,7 @@ export async function handleCallResult(
         leadId,
         idTipoEvento: tipoNoContestada.id,
         actorIntervencion: "IA",
+        guardian: "G7",
         descripcion: `Llamada no contestada (${endedReason})`,
       },
     })
@@ -951,6 +1028,7 @@ export async function handleCallResult(
           leadId,
           idTipoEvento: tipoAgotados.id,
           actorIntervencion: "IA",
+          guardian: "G7",
           descripcion: `Reintentos de llamada agotados`,
         },
       })
@@ -983,6 +1061,7 @@ export async function handleCallResult(
         leadId,
         idTipoEvento: tipoProgramado.id,
         actorIntervencion: "IA",
+        guardian: "G7",
         descripcion: `Reintento programado en ${callRetryDays} dias (${remaining} restantes)`,
       },
     })
@@ -1015,6 +1094,7 @@ export async function handleCallRetry(leadId: string, tenantId: string): Promise
           leadId,
           idTipoEvento: tipoLlamada.id,
           actorIntervencion: "Vendedor",
+          guardian: "G7",
           descripcion: `Notificación reintento de llamada a ${lead.telefono}`,
         },
       })
@@ -1047,6 +1127,7 @@ export async function handleCallRetry(leadId: string, tenantId: string): Promise
         leadId,
         idTipoEvento: tipoLlamada.id,
         actorIntervencion: "IA",
+        guardian: "G7",
         descripcion: `Reintento de llamada VAPI a ${lead.telefono}`,
       },
     })

@@ -1,0 +1,4 @@
+{"type":"server-started","port":57116,"host":"127.0.0.1","url_host":"localhost","url":"http://localhost:57116","screen_dir":"/Volumes/SSD 990 PRO/Documents/GitHub/rol_ia/.superpowers/brainstorm/87193-1775950122/content","state_dir":"/Volumes/SSD 990 PRO/Documents/GitHub/rol_ia/.superpowers/brainstorm/87193-1775950122/state"}
+{"type":"screen-added","file":"/Volumes/SSD 990 PRO/Documents/GitHub/rol_ia/.superpowers/brainstorm/87193-1775950122/content/dashboard-tabs-layout.html"}
+{"type":"screen-added","file":"/Volumes/SSD 990 PRO/Documents/GitHub/rol_ia/.superpowers/brainstorm/87193-1775950122/content/waiting.html"}
+{"type":"server-stopped","reason":"idle timeout"}

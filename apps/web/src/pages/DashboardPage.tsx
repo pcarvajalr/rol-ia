@@ -46,6 +46,11 @@ import { IntelOptimizer } from "@/components/intel-optimizer"
 import { IntelScheduling } from "@/components/intel-scheduling"
 import { IntelROASTrend } from "@/components/intel-roas-trend"
 
+/* Forensic panels */
+import { ForensicAuditoria } from "@/components/forensic-auditoria"
+import { ForensicBitacora } from "@/components/forensic-bitacora"
+import { ForensicRescueVendor } from "@/components/forensic-rescue-vendor"
+
 /* Guardian cards */
 import {
   GuardianCopywriter,
@@ -295,12 +300,19 @@ export function DashboardPage() {
               <BarChart3 className="h-3.5 w-3.5" />
               Reportes
             </TabsTrigger>
-            <TabsTrigger
+            {/* <TabsTrigger
               value="guardians"
               className="data-[state=active]:bg-aura/10 data-[state=active]:text-aura gap-1.5 rounded-md px-4 text-xs"
             >
               <Radio className="h-3.5 w-3.5" />
               Guardianes
+            </TabsTrigger> */}
+            <TabsTrigger
+              value="forensic"
+              className="data-[state=active]:bg-destructive/10 data-[state=active]:text-destructive gap-1.5 rounded-md px-4 text-xs"
+            >
+              <Search className="h-3.5 w-3.5" />
+              Auditorias Forenses
             </TabsTrigger>
             <TabsTrigger
               value="config"
@@ -386,9 +398,8 @@ export function DashboardPage() {
             </ReportGroup>
           </TabsContent>
 
-          {/* TAB 2: Guardianes */}
+          {/* TAB 2: Guardianes — COMENTADO
           <TabsContent value="guardians" className="flex flex-col gap-4">
-            {/* Operativos */}
             <ReportGroup
               icon={<Shield className="text-aura h-4 w-4" />}
               iconColor="text-aura"
@@ -403,9 +414,7 @@ export function DashboardPage() {
               <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_360px]">
                 <div className="flex flex-col gap-6">
                   <motion.div {...fadeIn(0)}>
-                    <SLATracker
-                      demoMode={false}
-                    />
+                    <SLATracker demoMode={false} />
                   </motion.div>
                   <motion.div {...fadeIn(0.06)}>
                     <ROASGuardian />
@@ -418,8 +427,6 @@ export function DashboardPage() {
                 </aside>
               </div>
             </ReportGroup>
-
-            {/* Estrategicos */}
             <ReportGroup
               icon={<Bot className="text-info h-4 w-4" />}
               iconColor="text-info"
@@ -449,8 +456,6 @@ export function DashboardPage() {
                 </motion.div>
               </div>
             </ReportGroup>
-
-            {/* Historial */}
             <ReportGroup
               icon={<Search className="text-muted-foreground h-4 w-4" />}
               iconColor="text-muted-foreground"
@@ -464,6 +469,58 @@ export function DashboardPage() {
             >
               <motion.div {...fadeIn(0)}>
                 <RescueHistory />
+              </motion.div>
+            </ReportGroup>
+          </TabsContent>
+          */}
+
+          {/* TAB 2: Auditorías Forenses */}
+          <TabsContent value="forensic" className="flex flex-col gap-4">
+            <ReportGroup
+              icon={<Search className="text-destructive h-4 w-4" />}
+              iconColor="text-destructive"
+              iconBg="bg-destructive/10"
+              title="Auditoria de Rendimiento"
+              subtitle="Deteccion de falla raiz y fuga de capital"
+              badge="G5"
+              badgeColor="border-destructive/30 text-destructive"
+              count={1}
+              defaultOpen={true}
+            >
+              <motion.div {...fadeIn(0)}>
+                <ForensicAuditoria />
+              </motion.div>
+            </ReportGroup>
+
+            <ReportGroup
+              icon={<Shield className="text-blue-500 h-4 w-4" />}
+              iconColor="text-blue-500"
+              iconBg="bg-blue-500/10"
+              title="Bitacora de Intervencion Critica"
+              subtitle="Reporte operativo G1 + G7 — timeline de eventos"
+              badge="G1 + G7"
+              badgeColor="border-blue-500/30 text-blue-500"
+              count={1}
+              defaultOpen={true}
+            >
+              <motion.div {...fadeIn(0.06)}>
+                <ForensicBitacora />
+              </motion.div>
+            </ReportGroup>
+
+            <ReportGroup
+              icon={<Eye className="text-muted-foreground h-4 w-4" />}
+              iconColor="text-muted-foreground"
+              iconBg="bg-secondary"
+              title="Historial de Rescates por Vendedor"
+              subtitle="Comparacion forense: que no hizo el vendedor vs que hizo ROL.IA"
+              badge="Por Asesor"
+              badgeColor="border-border/40 text-muted-foreground"
+              count={1}
+              defaultOpen={false}
+            >
+              <motion.div {...fadeIn(0.12)}>
+                <ForensicRescueVendor />
               </motion.div>
             </ReportGroup>
           </TabsContent>

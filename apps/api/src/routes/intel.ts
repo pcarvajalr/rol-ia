@@ -538,38 +538,521 @@ intel.get("/rescue-history", async (c) => {
 
   const db = createTenantClient(tenantId)
 
+  const since = new Date()
+  since.setDate(since.getDate() - 30)
+
+  // Buscar leads que tengan eventos forenses de rescate (semáforo rojo + rescate WhatsApp)
+  const tipoRojo = await db.catTipoEvento.findFirst({ where: { nombre: "Semáforo rojo" } })
+  const tipoRescate = await db.catTipoEvento.findFirst({ where: { nombre: "Rescate WhatsApp" } })
+  const tipoVerde = await db.catTipoEvento.findFirst({ where: { nombre: "Semáforo verde" } })
+
+  if (!tipoRojo || !tipoRescate) return c.json({ items: [] })
+
+  // Leads con rescate en los últimos 30 días
+  const rescateEvents = await db.leadEventHistory.findMany({
+    where: {
+      idTipoEvento: tipoRescate.id,
+      timestamp: { gte: since },
+    },
+    select: { leadId: true },
+    orderBy: { timestamp: "desc" },
+    take: 20,
+  })
+
+  const leadIds = [...new Set(rescateEvents.map((e) => e.leadId))]
+  if (leadIds.length === 0) return c.json({ items: [] })
+
+  // Obtener leads con vendedor y eventos forenses
   const leads = await db.leadTracking.findMany({
-    include: { eventos: { orderBy: { timestamp: "asc" } } },
-    take: 5,
+    where: { leadId: { in: leadIds } },
+    include: {
+      vendedor: { select: { nombre: true } },
+      eventos: {
+        where: { guardian: { not: null } },
+        orderBy: { timestamp: "asc" },
+        include: { tipoEvento: true },
+      },
+    },
+    orderBy: { fechaCreacion: "desc" },
+    take: 10,
+  })
+
+  const items = leads.map((l) => {
+    const verdeEvt = tipoVerde ? l.eventos.find((e) => e.idTipoEvento === tipoVerde.id) : null
+    const rojoEvt = l.eventos.find((e) => e.idTipoEvento === tipoRojo!.id)
+    const rescateEvt = l.eventos.find((e) => e.idTipoEvento === tipoRescate!.id)
+
+    // Tiempo sin respuesta humana = diff entre verde y rojo
+    const sinRespuestaMin = verdeEvt && rojoEvt
+      ? Math.round((rojoEvt.timestamp.getTime() - verdeEvt.timestamp.getTime()) / 60000)
+      : null
+
+    // Tiempo de rescate IA = diff entre rojo y rescate
+    const rescateMin = rojoEvt && rescateEvt
+      ? Math.round((rescateEvt.timestamp.getTime() - rojoEvt.timestamp.getTime()) / 1000)
+      : null
+
+    // Resultado del rescate: buscar evento de preferencia o estado final
+    const resultadoEvt = l.eventos.find((e) =>
+      e.tipoEvento && ["Preferencia llamada", "Preferencia agendamiento", "Preferencia chat", "Opt-out", "Llamada contestada", "Reintentos agotados"].includes(e.tipoEvento.nombre)
+    )
+
+    const h = l.fechaCreacion.getHours()
+    const m = l.fechaCreacion.getMinutes()
+    const time = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`
+
+    return {
+      time,
+      leadNombre: l.nombreLead,
+      vendedor: l.vendedor?.nombre || "Sin asignar",
+      human: sinRespuestaMin !== null ? `${sinRespuestaMin} min sin respuesta` : "No respondio",
+      aura: rescateEvt
+        ? `Rescate en ${rescateMin}s → ${resultadoEvt?.tipoEvento?.nombre || "En proceso"}`
+        : "Sin intervencion IA",
+    }
+  })
+
+  return c.json({ items })
+})
+
+// GET /intel/forensic-rescue-by-vendor
+intel.get("/forensic-rescue-by-vendor", async (c) => {
+  const tenantId = c.get("tenantId")
+  if (!tenantId) return c.json({ vendors: [] })
+
+  const db = createTenantClient(tenantId)
+
+  const since = new Date()
+  since.setDate(since.getDate() - 30)
+
+  // Tipos forenses relevantes
+  const [tipoVerde, tipoAmarillo, tipoRojo, tipoRescate, tipoPrefLlamada, tipoPrefAgenda, tipoPrefChat, tipoOptOut, tipoLlamadaRescate, tipoContestada, tipoNoContestada, tipoAgotados] = await Promise.all([
+    db.catTipoEvento.findFirst({ where: { nombre: "Semáforo verde" } }),
+    db.catTipoEvento.findFirst({ where: { nombre: "Semáforo amarillo" } }),
+    db.catTipoEvento.findFirst({ where: { nombre: "Semáforo rojo" } }),
+    db.catTipoEvento.findFirst({ where: { nombre: "Rescate WhatsApp" } }),
+    db.catTipoEvento.findFirst({ where: { nombre: "Preferencia llamada" } }),
+    db.catTipoEvento.findFirst({ where: { nombre: "Preferencia agendamiento" } }),
+    db.catTipoEvento.findFirst({ where: { nombre: "Preferencia chat" } }),
+    db.catTipoEvento.findFirst({ where: { nombre: "Opt-out" } }),
+    db.catTipoEvento.findFirst({ where: { nombre: "Llamada rescate" } }),
+    db.catTipoEvento.findFirst({ where: { nombre: "Llamada contestada" } }),
+    db.catTipoEvento.findFirst({ where: { nombre: "Llamada no contestada" } }),
+    db.catTipoEvento.findFirst({ where: { nombre: "Reintentos agotados" } }),
+  ])
+
+  const rescuedIds = new Set([tipoPrefLlamada?.id, tipoPrefAgenda?.id, tipoPrefChat?.id, tipoContestada?.id].filter(Boolean))
+  const lostIds = new Set([tipoOptOut?.id, tipoAgotados?.id, tipoNoContestada?.id].filter(Boolean))
+
+  // Vendedores del tenant
+  const vendedores = await db.vendedor.findMany({ select: { id: true, nombre: true } })
+
+  // Leads del período con vendedor y eventos forenses
+  const leads = await db.leadTracking.findMany({
+    where: { fechaCreacion: { gte: since }, vendedorId: { not: null } },
+    include: {
+      eventos: {
+        where: { guardian: { not: null } },
+        orderBy: { timestamp: "asc" },
+        include: { tipoEvento: true },
+      },
+    },
     orderBy: { fechaCreacion: "desc" },
   })
 
-  const items = leads
-    .filter((l) => l.eventos.length >= 2)
-    .map((l) => {
-      const humanEvt = l.eventos.find((e) => e.actorIntervencion === "HUMANO")
-      const iaEvt = l.eventos.find((e) => e.actorIntervencion === "IA")
+  // Agrupar leads por vendedor
+  const vendors = vendedores.map((v) => {
+    const vLeads = leads.filter((l) => l.vendedorId === v.id)
+    const totalLeads = vLeads.length
+    const leadsConRescate = vLeads.filter((l) => l.eventos.some((e) => e.idTipoEvento === tipoRescate?.id))
 
-      const leadTime = l.fechaCreacion
-      const humanDelay = humanEvt
-        ? Math.round((humanEvt.timestamp.getTime() - leadTime.getTime()) / 60000)
-        : null
-      const iaDelay = iaEvt
-        ? Math.round((iaEvt.timestamp.getTime() - leadTime.getTime()) / 60000)
+    let rescuedByIA = 0
+    let lostLeads = 0
+    let tiempoTotalSeg = 0
+    let tiempoCount = 0
+
+    // Armar eventos por lead
+    const events = leadsConRescate.map((l) => {
+      const verdeEvt = l.eventos.find((e) => e.idTipoEvento === tipoVerde?.id)
+      const rojoEvt = l.eventos.find((e) => e.idTipoEvento === tipoRojo?.id)
+      const rescateEvt = l.eventos.find((e) => e.idTipoEvento === tipoRescate?.id)
+
+      // Tiempo sin respuesta
+      const sinRespuestaMin = verdeEvt && rojoEvt
+        ? Math.round((rojoEvt.timestamp.getTime() - verdeEvt.timestamp.getTime()) / 60000)
         : null
 
-      const h = leadTime.getHours()
-      const m = leadTime.getMinutes()
-      const time = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`
+      if (sinRespuestaMin !== null) {
+        tiempoTotalSeg += sinRespuestaMin * 60
+        tiempoCount++
+      }
+
+      // Determinar resultado
+      const resultEvt = l.eventos.find((e) => e.idTipoEvento && (rescuedIds.has(e.idTipoEvento) || lostIds.has(e.idTipoEvento)))
+      let result: "rescued" | "lost" | "pending" = "pending"
+      if (resultEvt?.idTipoEvento && rescuedIds.has(resultEvt.idTipoEvento)) {
+        result = "rescued"
+        rescuedByIA++
+      } else if (resultEvt?.idTipoEvento && lostIds.has(resultEvt.idTipoEvento)) {
+        result = "lost"
+        lostLeads++
+      }
+
+      // Determinar tipo de rescate
+      const tieneCall = l.eventos.some((e) => e.idTipoEvento === tipoLlamadaRescate?.id)
+      const tieneAgenda = l.eventos.some((e) => e.idTipoEvento === tipoPrefAgenda?.id)
+      const rescueType = tieneAgenda ? "calendar" : tieneCall ? "call" : "whatsapp"
+
+      // Construir descripción de falla humana
+      const humanFailure = sinRespuestaMin !== null ? `Sin respuesta por ${sinRespuestaMin} minutos` : "Sin actividad registrada"
+
+      // Construir acción IA
+      const acciones: string[] = []
+      if (rescateEvt) acciones.push("G1: Rescate WhatsApp")
+      if (tieneCall) acciones.push("G7: Llamada de Rescate")
+      const iaAction = acciones.join(" + ") || "G1: Alerta enviada"
+
+      const h = l.fechaCreacion.getHours()
+      const m = l.fechaCreacion.getMinutes()
+      const timestamp = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`
 
       return {
-        time,
-        human: humanDelay !== null ? `${humanDelay} min sin respuesta` : "Sin actividad",
-        aura: iaEvt?.descripcion ?? "Sin intervencion IA",
+        leadId: l.leadId.slice(0, 8),
+        leadName: l.nombreLead,
+        timestamp,
+        humanFailure,
+        humanDetail: rojoEvt?.descripcion || "Vendedor no atendió dentro del tiempo límite",
+        iaAction,
+        iaDetail: resultEvt?.descripcion || rescateEvt?.descripcion || "Secuencia de rescate activada",
+        result,
+        rescueType,
       }
     })
 
-  return c.json({ items })
+    const avgResponseMin = tiempoCount > 0 ? (tiempoTotalSeg / tiempoCount / 60).toFixed(1) : "0"
+    const status = lostLeads >= 3 || parseFloat(avgResponseMin) >= 10 ? "critical"
+      : lostLeads >= 1 || parseFloat(avgResponseMin) >= 5 ? "warning"
+      : "ok"
+
+    return {
+      id: v.id,
+      name: v.nombre,
+      avatar: v.nombre.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase(),
+      totalLeads,
+      rescuedByIA,
+      lostLeads,
+      avgResponseTime: `${avgResponseMin} min`,
+      status,
+      events,
+    }
+  }).filter((v) => v.events.length > 0) // solo vendedores con rescates
+
+  return c.json({ vendors })
+})
+
+// === FORENSIC AUDIT MAPPINGS ===
+
+const TIPO_TO_ACCION: Record<string, string> = {
+  "Semáforo verde": "ALERTA_SEMAFORO_VERDE",
+  "Semáforo amarillo": "ALERTA_SEMAFORO_AMARILLO",
+  "Semáforo rojo": "ALERTA_SEMAFORO_ROJO",
+  "Rescate WhatsApp": "DISPARO_RESCATE_G1",
+  "Preferencia llamada": "PREF_LLAMADA_IA",
+  "Preferencia agendamiento": "PREF_AGENDAMIENTO",
+  "Preferencia chat": "PREF_CONTINUAR_CHAT",
+  "Opt-out": "PREF_OPT_OUT",
+  "Llamada rescate": "EJECUCION_LLAMADA_RESCATE",
+  "Llamada contestada": "ESTADO_LLAMADA_CONTESTADA",
+  "Llamada no contestada": "ESTADO_BUZON_NO_CONTESTA",
+  "Reintento programado": "INTENTO_REMARCADO",
+  "Reintentos agotados": "REINTENTOS_AGOTADOS",
+}
+
+const ACCION_TO_TIPO_EVENTO: Record<string, string> = {
+  ALERTA_SEMAFORO_VERDE: "alerta",
+  ALERTA_SEMAFORO_AMARILLO: "alerta",
+  ALERTA_SEMAFORO_ROJO: "alerta",
+  DISPARO_RESCATE_G1: "accion",
+  EJECUCION_LLAMADA_RESCATE: "accion",
+  INTENTO_REMARCADO: "accion",
+  PREF_LLAMADA_IA: "respuesta",
+  PREF_AGENDAMIENTO: "respuesta",
+  PREF_CONTINUAR_CHAT: "respuesta",
+  PREF_OPT_OUT: "respuesta",
+  ESTADO_LLAMADA_CONTESTADA: "estado",
+  ESTADO_BUZON_NO_CONTESTA: "estado",
+  REINTENTOS_AGOTADOS: "estado",
+}
+
+const ACCIONES_EXITO = ["ESTADO_LLAMADA_CONTESTADA", "PREF_AGENDAMIENTO", "PREF_CONTINUAR_CHAT"]
+const ACCIONES_FRACASO = ["ESTADO_BUZON_NO_CONTESTA", "PREF_OPT_OUT", "REINTENTOS_AGOTADOS"]
+
+const TIPOS_FORENSES = Object.keys(TIPO_TO_ACCION)
+
+// GET /intel/forensic-bitacora
+intel.get("/forensic-bitacora", async (c) => {
+  const tenantId = c.get("tenantId")
+  if (!tenantId) return c.json({ events: [], stats: { total: 0, exitosos: 0, alertasRojas: 0, optOuts: 0 } })
+
+  const db = createTenantClient(tenantId)
+
+  const tiposForenses = await db.catTipoEvento.findMany({
+    where: { nombre: { in: TIPOS_FORENSES } },
+  })
+  const tipoIds = tiposForenses.map((t) => t.id)
+
+  if (tipoIds.length === 0) {
+    return c.json({ events: [], stats: { total: 0, exitosos: 0, alertasRojas: 0, optOuts: 0 } })
+  }
+
+  const since = new Date()
+  since.setDate(since.getDate() - 30)
+
+  const rawEvents = await db.leadEventHistory.findMany({
+    where: {
+      idTipoEvento: { in: tipoIds },
+      timestamp: { gte: since },
+    },
+    include: {
+      lead: {
+        select: {
+          nombreLead: true,
+          telefono: true,
+          fuente: true,
+          fechaCreacion: true,
+          vendedor: { select: { id: true, nombre: true } },
+        },
+      },
+      tipoEvento: true,
+    },
+    orderBy: { timestamp: "desc" },
+    take: 500,
+  })
+
+  const events = rawEvents.map((e) => {
+    const accion = e.tipoEvento ? TIPO_TO_ACCION[e.tipoEvento.nombre] || "SISTEMA" : "SISTEMA"
+    const tipoEvento = ACCION_TO_TIPO_EVENTO[accion] || "estado"
+    const tiempoRespuestaSeg = Math.round((e.timestamp.getTime() - e.lead.fechaCreacion.getTime()) / 1000)
+
+    return {
+      id: e.eventId,
+      timestamp: e.timestamp.toISOString(),
+      leadId: e.leadId,
+      leadNombre: e.lead.nombreLead,
+      telefono: e.lead.telefono || "",
+      fuente: e.lead.fuente,
+      accion,
+      guardian: e.guardian || null,
+      tipoEvento,
+      resultado: e.descripcion || "",
+      vendedorAsignado: e.lead.vendedor?.nombre || "Sin asignar",
+      tiempoRespuestaSeg,
+    }
+  })
+
+  const stats = {
+    total: events.length,
+    exitosos: events.filter((e) => ACCIONES_EXITO.includes(e.accion)).length,
+    alertasRojas: events.filter((e) => e.accion === "ALERTA_SEMAFORO_ROJO").length,
+    optOuts: events.filter((e) => e.accion === "PREF_OPT_OUT").length,
+  }
+
+  return c.json({ events, stats })
+})
+
+// GET /intel/forensic-auditoria
+intel.get("/forensic-auditoria", async (c) => {
+  const tenantId = c.get("tenantId")
+  if (!tenantId) return c.json({ asesores: [], resumen: { pctFallaComercial: 0, causaPrincipal: "N/A", totalLeadsRojos: 0, totalRescatesIA: 0, tiempoMedioGeneral: 0 } })
+
+  const db = createTenantClient(tenantId)
+
+  const since = new Date()
+  since.setDate(since.getDate() - 30)
+
+  const vendedores = await db.vendedor.findMany({
+    select: { id: true, nombre: true },
+  })
+
+  const tipoRojo = await db.catTipoEvento.findFirst({ where: { nombre: "Semáforo rojo" } })
+  const tipoRescate = await db.catTipoEvento.findFirst({ where: { nombre: "Rescate WhatsApp" } })
+  const tipoVerde = await db.catTipoEvento.findFirst({ where: { nombre: "Semáforo verde" } })
+
+  const leads = await db.leadTracking.findMany({
+    where: { fechaCreacion: { gte: since } },
+    select: {
+      leadId: true,
+      fechaCreacion: true,
+      vendedorId: true,
+      semaphoreColor: true,
+    },
+  })
+
+  const totalLeads = leads.length
+
+  const eventosForenses = await db.leadEventHistory.findMany({
+    where: {
+      timestamp: { gte: since },
+      guardian: { not: null },
+    },
+    select: {
+      leadId: true,
+      idTipoEvento: true,
+      timestamp: true,
+    },
+  })
+
+  const asesores = vendedores.map((v) => {
+    const leadsVendedor = leads.filter((l) => l.vendedorId === v.id)
+    const leadIds = leadsVendedor.map((l) => l.leadId)
+
+    const leadsSemaforoRojo = leadsVendedor.filter((l) => l.semaphoreColor === "rojo").length
+
+    const rescatesPorIA = tipoRescate
+      ? eventosForenses.filter((e) => leadIds.includes(e.leadId) && e.idTipoEvento === tipoRescate.id).length
+      : 0
+
+    let tiempoTotalSeg = 0
+    let tiempoCount = 0
+
+    for (const lead of leadsVendedor) {
+      const verdeEvento = tipoVerde
+        ? eventosForenses.find((e) => e.leadId === lead.leadId && e.idTipoEvento === tipoVerde.id)
+        : null
+      const rojoEvento = tipoRojo
+        ? eventosForenses.find((e) => e.leadId === lead.leadId && e.idTipoEvento === tipoRojo.id)
+        : null
+
+      if (verdeEvento && rojoEvento) {
+        tiempoTotalSeg += Math.round((rojoEvento.timestamp.getTime() - verdeEvento.timestamp.getTime()) / 1000)
+        tiempoCount++
+      }
+    }
+
+    const tiempoMedioSeg = tiempoCount > 0 ? Math.round(tiempoTotalSeg / tiempoCount) : 0
+    const tiempoMedioMin = Math.round(tiempoMedioSeg / 60)
+
+    let accionTipo: "reasignacion" | "capacitacion" | "mantener"
+    let accionSugerida: string
+    if (tiempoMedioMin >= 10) {
+      accionTipo = "reasignacion"
+      accionSugerida = "REASIGNACION INMEDIATA"
+    } else if (tiempoMedioMin >= 5) {
+      accionTipo = "capacitacion"
+      accionSugerida = "CAPACITACION EN CIERRE"
+    } else {
+      accionTipo = "mantener"
+      accionSugerida = "MANTENER FLUJO ALTO"
+    }
+
+    return {
+      id: v.id,
+      nombre: v.nombre,
+      tiempoMedioSeg,
+      leadsSemaforoRojo,
+      rescatesPorIA,
+      accionSugerida,
+      accionTipo,
+    }
+  })
+
+  const totalLeadsRojos = leads.filter((l) => l.semaphoreColor === "rojo").length
+  const totalRescatesIA = tipoRescate
+    ? eventosForenses.filter((e) => e.idTipoEvento === tipoRescate.id).length
+    : 0
+  const pctFallaComercial = totalLeads > 0 ? Math.round((totalLeadsRojos / totalLeads) * 100) : 0
+  const asesoresConTiempo = asesores.filter((a) => a.tiempoMedioSeg > 0)
+  const tiempoMedioGeneral = asesoresConTiempo.length > 0
+    ? Math.round(asesoresConTiempo.reduce((sum, a) => sum + a.tiempoMedioSeg, 0) / asesoresConTiempo.length / 60)
+    : 0
+
+  return c.json({
+    asesores,
+    resumen: {
+      pctFallaComercial,
+      causaPrincipal: pctFallaComercial >= 50 ? "Falla Comercial" : "Tiempo de Respuesta",
+      totalLeadsRojos,
+      totalRescatesIA,
+      tiempoMedioGeneral,
+    },
+  })
+})
+
+// POST /intel/forensic-auditoria/reasignar
+intel.post("/forensic-auditoria/reasignar", async (c) => {
+  const tenantId = c.get("tenantId")
+  if (!tenantId) return c.json({ error: "No tenant" }, 400)
+
+  const body = await c.req.json<{
+    vendedorOrigenId: string
+    vendedorDestinoId: string
+    soloLeadsCriticos: boolean
+  }>()
+
+  const { vendedorOrigenId, vendedorDestinoId, soloLeadsCriticos } = body
+
+  if (!vendedorOrigenId || !vendedorDestinoId) {
+    return c.json({ error: "vendedorOrigenId y vendedorDestinoId son requeridos" }, 400)
+  }
+
+  if (vendedorOrigenId === vendedorDestinoId) {
+    return c.json({ error: "Origen y destino no pueden ser el mismo vendedor" }, 400)
+  }
+
+  const db = createTenantClient(tenantId)
+
+  const vendedorDestino = await db.vendedor.findUnique({
+    where: { id: vendedorDestinoId },
+    select: { nombre: true },
+  })
+
+  if (!vendedorDestino) {
+    return c.json({ error: "Vendedor destino no encontrado" }, 404)
+  }
+
+  const coloresFiltro = soloLeadsCriticos ? ["rojo"] : ["rojo", "amarillo"]
+  const leadsParaReasignar = await db.leadTracking.findMany({
+    where: {
+      vendedorId: vendedorOrigenId,
+      semaphoreColor: { in: coloresFiltro },
+      flowJobId: { not: null },
+    },
+    select: { leadId: true },
+  })
+
+  if (leadsParaReasignar.length === 0) {
+    return c.json({ leadsReasignados: 0, vendedorDestino: vendedorDestino.nombre })
+  }
+
+  const leadIds = leadsParaReasignar.map((l) => l.leadId)
+
+  await db.leadTracking.updateMany({
+    where: { leadId: { in: leadIds } },
+    data: { vendedorId: vendedorDestinoId },
+  })
+
+  const vendedorOrigen = await db.vendedor.findUnique({
+    where: { id: vendedorOrigenId },
+    select: { nombre: true },
+  })
+
+  for (const lead of leadsParaReasignar) {
+    await db.leadEventHistory.create({
+      data: {
+        tenantId,
+        leadId: lead.leadId,
+        idTipoEvento: null,
+        actorIntervencion: "IA",
+        guardian: "G1",
+        descripcion: `Reasignado de ${vendedorOrigen?.nombre || "desconocido"} a ${vendedorDestino.nombre}`,
+      },
+    })
+  }
+
+  return c.json({
+    leadsReasignados: leadIds.length,
+    vendedorDestino: vendedorDestino.nombre,
+  })
 })
 
 export { intel as intelRoutes }

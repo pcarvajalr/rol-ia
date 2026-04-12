@@ -158,6 +158,22 @@ internalRouter.post("/lead-semaphore-alert/:leadId", async (c) => {
 
   await notifyVendedor(lead.tenantId, leadId, accion)
 
+  // Registrar evento forense de semáforo
+  const tipoNombre = color === "yellow" ? "Semáforo amarillo" : "Semáforo rojo"
+  const tipoSemaforo = await prisma.catTipoEvento.findFirst({ where: { nombre: tipoNombre } })
+  if (tipoSemaforo) {
+    await prisma.leadEventHistory.create({
+      data: {
+        tenantId: lead.tenantId,
+        leadId,
+        idTipoEvento: tipoSemaforo.id,
+        actorIntervencion: "IA",
+        guardian: "G1",
+        descripcion: accion,
+      },
+    })
+  }
+
   console.log(`[internal] Semaphore alert ${color} sent for lead ${leadId}`)
   return c.json({ ok: true })
 })

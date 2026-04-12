@@ -1,0 +1,181 @@
+<h2>Sección 3: Frontend — Estructura de Tabs</h2>
+<p class="subtitle">Cómo se reorganizan los tabs del dashboard al comentar Guardianes y agregar Auditorías Forenses</p>
+
+<div class="section">
+  <h3>Estado Actual → Propuesto</h3>
+</div>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">ACTUAL — 3 Tabs</div>
+    <div class="mockup-body">
+      <div style="display:flex;gap:8px;margin-bottom:20px;padding:6px;background:#1a1a2e;border-radius:8px;">
+        <div style="padding:6px 16px;background:#7c3aed20;color:#a78bfa;border-radius:6px;font-size:12px;font-weight:600;">📊 Reportes</div>
+        <div style="padding:6px 16px;background:#2a2a3e;color:#888;border-radius:6px;font-size:12px;">📡 Guardianes</div>
+        <div style="padding:6px 16px;background:#2a2a3e;color:#888;border-radius:6px;font-size:12px;">⚙️ Configuración</div>
+      </div>
+
+      <div style="padding:12px;background:#1a1a2e;border-radius:8px;margin-bottom:10px;">
+        <div style="font-size:11px;color:#888;margin-bottom:8px;">Tab "Guardianes" contiene:</div>
+        <div style="font-size:11px;color:#666;line-height:1.8;">
+          • Guardianes Operativos (SLA Tracker, ROAS Guardian)<br>
+          • Guardianes Estratégicos (Copywriter, Predictivo, Auditor, Optimizer, Scheduler)<br>
+          • Historial de Rescates
+        </div>
+        <div style="margin-top:8px;padding:6px 10px;background:#ef444420;border:1px solid #ef444440;border-radius:6px;font-size:10px;color:#ef4444;">
+          ⚠ No funcional — se comenta todo el tab
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">PROPUESTO — 3 Tabs (reemplaza Guardianes)</div>
+    <div class="mockup-body">
+      <div style="display:flex;gap:8px;margin-bottom:20px;padding:6px;background:#1a1a2e;border-radius:8px;">
+        <div style="padding:6px 16px;background:#2a2a3e;color:#888;border-radius:6px;font-size:12px;">📊 Reportes</div>
+        <div style="padding:6px 16px;background:#ef444420;color:#f87171;border-radius:6px;font-size:12px;font-weight:600;">🔍 Auditorías Forenses</div>
+        <div style="padding:6px 16px;background:#2a2a3e;color:#888;border-radius:6px;font-size:12px;">⚙️ Configuración</div>
+      </div>
+
+      <div style="padding:12px;background:#1a1a2e;border-radius:8px;margin-bottom:10px;">
+        <div style="font-size:11px;color:#f87171;font-weight:600;margin-bottom:8px;">Nuevo tab "Auditorías Forenses":</div>
+        <div style="font-size:11px;color:#aaa;line-height:2;">
+          <div style="padding:6px 10px;background:#ef444410;border-left:2px solid #ef4444;border-radius:4px;margin-bottom:6px;">
+            📋 <strong>Auditoría G5</strong> — Tabla de asesores + veredicto + predicción + botón reasignar
+          </div>
+          <div style="padding:6px 10px;background:#3b82f610;border-left:2px solid #3b82f6;border-radius:4px;">
+            📜 <strong>Bitácora G1+G7</strong> — Timeline de eventos con filtros masivos y puntuales
+          </div>
+        </div>
+      </div>
+
+      <div style="padding:8px 10px;background:#22c55e15;border:1px solid #22c55e30;border-radius:6px;font-size:10px;color:#22c55e;">
+        ✓ Misma posición que Guardianes en el diseño de referencia
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:24px;">
+  <h3>Contenido del Tab "Auditorías Forenses"</h3>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">Layout interno del tab</div>
+  <div class="mockup-body">
+    <!-- ReportGroup 1: Auditoría -->
+    <div style="border:1px solid #333;border-radius:10px;padding:14px;margin-bottom:16px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <div style="width:28px;height:28px;background:#ef444420;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px;">🔍</div>
+        <div>
+          <div style="font-size:12px;font-weight:600;color:#eee;">Auditoría de Rendimiento</div>
+          <div style="font-size:10px;color:#666;">Detección de falla raíz y fuga de capital</div>
+        </div>
+        <div style="margin-left:auto;padding:3px 8px;background:#ef444420;border:1px solid #ef444440;border-radius:12px;font-size:9px;color:#ef4444;">G5</div>
+      </div>
+
+      <!-- Tabla asesores -->
+      <div style="background:#111;border-radius:6px;overflow:hidden;margin-bottom:10px;">
+        <div style="display:grid;grid-template-columns:1fr 100px 110px 90px 160px;gap:4px;padding:8px 12px;background:#0a0a0f;font-size:9px;color:#555;text-transform:uppercase;letter-spacing:1px;">
+          <span>Asesor</span><span>Tiempo</span><span>Semáforo Rojo</span><span>Rescates IA</span><span>Acción</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 100px 110px 90px 160px;gap:4px;padding:8px 12px;border-bottom:1px solid #1a1a2e;font-size:11px;background:#ef444408;">
+          <span style="color:#eee;">Carlos M.</span>
+          <span style="color:#ef4444;font-weight:600;">45 min</span>
+          <span><span style="padding:2px 6px;background:#ef444420;color:#ef4444;border-radius:8px;font-size:10px;">15</span></span>
+          <span><span style="padding:2px 6px;background:#a855f720;color:#a855f7;border-radius:8px;font-size:10px;">12</span></span>
+          <span style="font-size:9px;padding:2px 6px;background:#ef444420;color:#ef4444;border-radius:8px;">REASIGNACIÓN</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 100px 110px 90px 160px;gap:4px;padding:8px 12px;border-bottom:1px solid #1a1a2e;font-size:11px;">
+          <span style="color:#eee;">Ana R.</span>
+          <span style="color:#eab308;font-weight:600;">12 min</span>
+          <span><span style="padding:2px 6px;background:#eab30820;color:#eab308;border-radius:8px;font-size:10px;">4</span></span>
+          <span><span style="padding:2px 6px;background:#a855f720;color:#a855f7;border-radius:8px;font-size:10px;">2</span></span>
+          <span style="font-size:9px;padding:2px 6px;background:#eab30820;color:#eab308;border-radius:8px;">CAPACITACIÓN</span>
+        </div>
+      </div>
+
+      <!-- Veredicto + Predicción -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div style="padding:10px;border:1px dashed #ef444440;border-radius:8px;">
+          <div style="font-size:9px;color:#ef4444;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Veredicto del Auditor G5</div>
+          <div style="font-size:10px;color:#999;line-height:1.5;">"El 70% de las oportunidades perdidas..."</div>
+        </div>
+        <div style="padding:10px;border:1px dashed #3b82f640;border-radius:8px;">
+          <div style="font-size:9px;color:#3b82f6;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Predicción de Impacto G4</div>
+          <div style="font-size:10px;color:#999;line-height:1.5;">"De continuar con este ritmo..."</div>
+        </div>
+      </div>
+
+      <!-- Botón reasignar -->
+      <div style="padding:8px;background:#22c55e;border-radius:6px;text-align:center;font-size:11px;color:#fff;font-weight:600;">
+        EJECUTAR REASIGNACIÓN AUTOMÁTICA DE LEADS CRÍTICOS
+      </div>
+    </div>
+
+    <!-- ReportGroup 2: Bitácora -->
+    <div style="border:1px solid #333;border-radius:10px;padding:14px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <div style="width:28px;height:28px;background:#3b82f620;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px;">🛡️</div>
+        <div>
+          <div style="font-size:12px;font-weight:600;color:#eee;">Bitácora de Intervención Crítica</div>
+          <div style="font-size:10px;color:#666;">Reporte operativo G1 + G7</div>
+        </div>
+        <div style="margin-left:auto;padding:3px 8px;background:#3b82f620;border:1px solid #3b82f640;border-radius:12px;font-size:9px;color:#3b82f6;">G1 + G7</div>
+      </div>
+
+      <!-- Filtros -->
+      <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
+        <div style="padding:4px 10px;background:#1a1a2e;border-radius:4px;font-size:10px;color:#888;border:1px solid #333;">Guardian ▾</div>
+        <div style="padding:4px 10px;background:#1a1a2e;border-radius:4px;font-size:10px;color:#888;border:1px solid #333;">Acción ▾</div>
+        <div style="padding:4px 10px;background:#1a1a2e;border-radius:4px;font-size:10px;color:#888;border:1px solid #333;">Tipo ▾</div>
+        <div style="padding:4px 10px;background:#1a1a2e;border-radius:4px;font-size:10px;color:#888;border:1px solid #333;">Canal ▾</div>
+        <div style="padding:4px 10px;background:#1a1a2e;border-radius:4px;font-size:10px;color:#888;border:1px solid #333;">Vendedor ▾</div>
+        <div style="padding:4px 10px;background:#1a1a2e;border-radius:4px;font-size:10px;color:#888;border:1px solid #333;">Resultado ▾</div>
+      </div>
+
+      <!-- Timeline rows -->
+      <div style="background:#111;border-radius:6px;overflow:hidden;">
+        <div style="display:grid;grid-template-columns:60px 120px 160px 60px 1fr;gap:4px;padding:8px 12px;background:#0a0a0f;font-size:9px;color:#555;text-transform:uppercase;letter-spacing:1px;">
+          <span>Hora</span><span>Lead</span><span>Acción</span><span>Guardian</span><span>Resultado</span>
+        </div>
+        <div style="display:grid;grid-template-columns:60px 120px 160px 60px 1fr;gap:4px;padding:6px 12px;border-bottom:1px solid #1a1a2e;font-size:10px;">
+          <span style="color:#888;">14:00</span>
+          <span style="color:#eee;">Juan P.</span>
+          <span><span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:7px;height:7px;border-radius:50%;background:#22c55e;display:inline-block;"></span><span style="color:#22c55e;font-size:10px;">Semáforo Verde</span></span></span>
+          <span style="color:#3b82f6;font-size:9px;">G1</span>
+          <span style="color:#999;font-size:10px;">Notificación enviada a Carlos M.</span>
+        </div>
+        <div style="display:grid;grid-template-columns:60px 120px 160px 60px 1fr;gap:4px;padding:6px 12px;border-bottom:1px solid #1a1a2e;font-size:10px;background:#eab30808;">
+          <span style="color:#888;">14:05</span>
+          <span style="color:#eee;">Juan P.</span>
+          <span><span style="display:inline-flex;align-items:center;gap:4px;"><span style="width:7px;height:7px;border-radius:50%;background:#eab308;display:inline-block;"></span><span style="color:#eab308;font-size:10px;">Semáforo Amarillo</span></span></span>
+          <span style="color:#3b82f6;font-size:9px;">G1</span>
+          <span style="color:#999;font-size:10px;">El lead lleva 5 min sin atención</span>
+        </div>
+        <div style="display:grid;grid-template-columns:60px 120px 160px 60px 1fr;gap:4px;padding:6px 12px;border-bottom:1px solid #1a1a2e;font-size:10px;background:#ef444408;">
+          <span style="color:#888;">14:10</span>
+          <span style="color:#eee;">Juan P.</span>
+          <span><span style="display:inline-flex;align-items:center;gap:4px;">⚠️ <span style="color:#ef4444;font-size:10px;">Semáforo Rojo</span></span></span>
+          <span style="color:#3b82f6;font-size:9px;">G1</span>
+          <span style="color:#999;font-size:10px;">ROL.IA toma el control del lead</span>
+        </div>
+        <div style="display:grid;grid-template-columns:60px 120px 160px 60px 1fr;gap:4px;padding:6px 12px;border-bottom:1px solid #1a1a2e;font-size:10px;">
+          <span style="color:#888;">14:10</span>
+          <span style="color:#eee;">Juan P.</span>
+          <span><span style="display:inline-flex;align-items:center;gap:4px;">💬 <span style="color:#3b82f6;font-size:10px;">Rescate WhatsApp</span></span></span>
+          <span style="color:#3b82f6;font-size:9px;">G1</span>
+          <span style="color:#999;font-size:10px;">WhatsApp enviado automáticamente</span>
+        </div>
+        <div style="display:grid;grid-template-columns:60px 120px 160px 60px 1fr;gap:4px;padding:6px 12px;font-size:10px;">
+          <span style="color:#888;">14:12</span>
+          <span style="color:#eee;">Juan P.</span>
+          <span><span style="display:inline-flex;align-items:center;gap:4px;">📞 <span style="color:#a855f7;font-size:10px;">Pref: Llamada IA</span></span></span>
+          <span style="color:#3b82f6;font-size:9px;">G1</span>
+          <span style="color:#999;font-size:10px;">Cliente eligió ser llamado</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
