@@ -324,16 +324,27 @@ Cada WhatsApp Business Account (WABA) debe tener la app suscrita para recibir we
 ### Archivos .js fantasma en apps/web/src
 Vite resuelve `.js` con mayor prioridad que `.tsx`. Si existen archivos `.js` compilados viejos junto a los `.tsx` (ej: `guardian-config.js` al lado de `guardian-config.tsx`), Vite sirve la versión vieja sin los cambios nuevos. No genera error en consola — simplemente renderiza la versión vieja.
 
+**Causa raíz:** el script `build` original usaba `tsc -b` (build mode), que **ignora `noEmit: true`** del tsconfig y emite `.js` dentro de `src/`. Se corrigió a `tsc --noEmit && vite build` para que TypeScript solo valide tipos sin emitir archivos.
+
 **Síntoma:** cambios en archivos `.tsx` del frontend no se reflejan en el navegador, ni con cache clear, reinstall, ni incógnito.
 
-**Diagnóstico:**
+**Prevención (ya aplicada):**
+- `apps/web/package.json`: `"build": "tsc --noEmit && vite build"` (NO `tsc -b`)
+- `apps/web/package.json`: script `"clean:js"` disponible para limpiar manualmente
+- `.gitignore`: `apps/web/src/**/*.js` evita que se commiteen
+- `tsconfig.app.json`: `noEmit: true` (respetado por `tsc --noEmit`, ignorado por `tsc -b`)
+
+**IMPORTANTE — revisar ANTES de debuggear features en local:**
+Si un cambio en el frontend no surte efecto, lo primero es verificar si hay `.js` fantasma:
 ```bash
 find apps/web/src -name "*.js" -not -path "*/node_modules/*"
 ```
 
-**Solución:**
+**Limpiar:**
 ```bash
+pnpm --filter web run clean:js
+# o directamente:
 find apps/web/src -name "*.js" -delete
 ```
 
-Esto NO afecta producción (el build compila desde `.tsx`), solo el dev server local. Los `.js` están en `.gitignore` (`apps/web/src/**/*.js`) pero persisten en disco local.
+Esto NO afecta producción (el build compila desde `.tsx`), solo el dev server local.

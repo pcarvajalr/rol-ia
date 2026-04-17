@@ -1,6 +1,5 @@
 
 import { useState, useEffect, useCallback } from "react"
-import { motion, AnimatePresence } from "framer-motion"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Users, Shield, Eye, Clock } from "lucide-react"
@@ -136,7 +135,7 @@ export function IntelAbandonment() {
   }).length
 
   return (
-    <Card className="border-border/50 bg-card">
+    <Card className="border-border/50 bg-card flex h-[700px] flex-col">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-foreground flex items-center gap-2 text-sm font-semibold">
@@ -172,7 +171,7 @@ export function IntelAbandonment() {
           </div>
         </div>
       </CardHeader>
-      <CardContent className="flex flex-col gap-3">
+      <CardContent className="flex min-h-0 flex-1 flex-col gap-3">
         {/* Legend */}
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-1.5">
@@ -190,58 +189,56 @@ export function IntelAbandonment() {
         </div>
 
         {/* Lead rows */}
-        <div className="flex flex-col gap-1.5">
-          <div className="text-muted-foreground grid grid-cols-[1fr_80px_70px_90px_80px] items-center gap-2 px-3 text-[10px] font-medium uppercase tracking-wider">
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="text-muted-foreground grid grid-cols-[1fr_80px_70px_90px_80px] items-center gap-2 px-3 pb-1.5 text-[10px] font-medium uppercase tracking-wider">
             <span>Lead</span>
             <span>Fuente</span>
             <span>Estado</span>
             <span className="text-right">Tiempo Agonia</span>
             <span className="text-right">Progreso</span>
           </div>
-          <AnimatePresence>
-            {sorted.map((lead) => {
-              const displayMs = lead.isFlowActive ? lead.waitMs : (lead.semaphoreTimeMs || 0)
-              const status = getStatus(displayMs, thresholds)
-              const redThresholdMs = (thresholds.tiempoVerdeMins + thresholds.tiempoAmarilloMins) * 60000
-              const pct = Math.min((displayMs / redThresholdMs) * 100, 100)
-              return (
-                <motion.div
-                  key={lead.id}
-                  layout
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className={`grid grid-cols-[1fr_80px_70px_90px_80px] items-center gap-2 rounded-lg px-3 py-2.5 ${status.border} border bg-secondary/30`}
-                >
-                  <div className="flex flex-col">
-                    <span className="text-foreground text-xs font-medium">{lead.name}</span>
-                    <Badge variant="outline" className={`mt-0.5 w-fit text-[10px] ${ESTADO_COLORS[lead.estadoGestion ?? ""] ?? "border-border/40 text-muted-foreground"}`}>
-                      {lead.estadoGestion ?? "Sin estado"}
-                    </Badge>
-                  </div>
-                  <span className="text-muted-foreground text-xs">{lead.source}</span>
-                  <Badge
-                    variant="outline"
-                    className={`${status.color} ${status.border} w-fit text-[10px]`}
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="flex flex-col gap-1.5">
+              {sorted.map((lead) => {
+                const displayMs = lead.isFlowActive ? lead.waitMs : (lead.semaphoreTimeMs || 0)
+                const status = getStatus(displayMs, thresholds)
+                const redThresholdMs = (thresholds.tiempoVerdeMins + thresholds.tiempoAmarilloMins) * 60000
+                const pct = Math.min((displayMs / redThresholdMs) * 100, 100)
+                return (
+                  <div
+                    key={lead.id}
+                    className={`grid grid-cols-[1fr_80px_70px_90px_80px] items-center gap-2 rounded-lg px-3 py-2.5 ${status.border} border bg-secondary/30`}
                   >
-                    {status.label}
-                  </Badge>
-                  <div className={`flex items-center justify-end gap-1 font-mono text-xs ${status.color}`}>
-                    <Clock className="h-3 w-3" />
-                    {formatTime(displayMs)}
-                  </div>
-                  <div className="flex items-center justify-end">
-                    <div className="bg-secondary h-1.5 w-full overflow-hidden rounded-full">
-                      <motion.div
-                        className={`h-full rounded-full ${status.bg}`}
-                        style={{ width: `${pct}%` }}
-                        transition={{ duration: 0.3 }}
-                      />
+                    <div className="flex flex-col">
+                      <span className="text-foreground text-xs font-medium">{lead.name}</span>
+                      <Badge variant="outline" className={`mt-0.5 w-fit text-[10px] ${ESTADO_COLORS[lead.estadoGestion ?? ""] ?? "border-border/40 text-muted-foreground"}`}>
+                        {lead.estadoGestion ?? "Sin estado"}
+                      </Badge>
+                    </div>
+                    <span className="text-muted-foreground text-xs">{lead.source}</span>
+                    <Badge
+                      variant="outline"
+                      className={`${status.color} ${status.border} w-fit text-[10px]`}
+                    >
+                      {status.label}
+                    </Badge>
+                    <div className={`flex items-center justify-end gap-1 font-mono text-xs ${status.color}`}>
+                      <Clock className="h-3 w-3" />
+                      {formatTime(displayMs)}
+                    </div>
+                    <div className="flex items-center justify-end">
+                      <div className="bg-secondary h-1.5 w-full overflow-hidden rounded-full">
+                        <div
+                          className={`h-full rounded-full ${status.bg} transition-all duration-300`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
                     </div>
                   </div>
-                </motion.div>
-              )
-            })}
-          </AnimatePresence>
+                )
+              })}
+            </div>
+          </div>
         </div>
       </CardContent>
     </Card>

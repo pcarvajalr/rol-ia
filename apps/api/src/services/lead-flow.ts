@@ -597,10 +597,11 @@ export async function handleButtonResponse(
 
   if (!lead) return
 
-  // Verify flow is still active (last event = "WhatsApp")
+  // Verify flow is still active (last event = "WhatsApp" or "Rescate WhatsApp")
   const lastEvent = await getLastEvent(leadId, tenantId)
-  if (!lastEvent || lastEvent.tipoEvento?.nombre !== "WhatsApp") {
-    console.log(`[lead-flow] Lead ${leadId} not waiting for button response, skipping`)
+  const validEvents = ["WhatsApp", "Rescate WhatsApp"]
+  if (!lastEvent || !validEvents.includes(lastEvent.tipoEvento?.nombre ?? "")) {
+    console.log(`[lead-flow] Lead ${leadId} not waiting for button response (last=${lastEvent?.tipoEvento?.nombre}), skipping`)
     return
   }
 
