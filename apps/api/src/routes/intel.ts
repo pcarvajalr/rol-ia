@@ -130,25 +130,36 @@ intel.get("/abandonment", async (c) => {
     ? { OR: [{ idEstado: null }, { idEstado: { notIn: excludedIds } }] }
     : {}
 
+  // Load CRM state mappings for this tenant (to show CRM label instead of internal name)
+  const crmMappings = await db.crmStateMapping.findMany({
+    where: { tenantId },
+    select: { catEstadoGestionId: true, crmStatus: true },
+  })
+  // Map: internal estado id → CRM status label
+  const estadoToCrm = new Map<number, string>()
+  for (const m of crmMappings) {
+    // If multiple CRM statuses map to the same estado, keep the first one
+    if (!estadoToCrm.has(m.catEstadoGestionId)) {
+      estadoToCrm.set(m.catEstadoGestionId, m.crmStatus)
+    }
+  }
+
   // Active in semaphore: semaphoreTimeMs is null (not yet stopped by CRM)
   const activeLeads = await db.leadTracking.findMany({
     where: { tenantId, semaphoreTimeMs: null, ...stateFilter },
-    include: { estado: { select: { nombre: true } } },
+    include: { estado: { select: { id: true, nombre: true } } },
     orderBy: { fechaCreacion: "desc" },
-    take: 10,
   })
 
-  // Completed in semaphore: semaphoreTimeMs set (stopped by CRM), last 24h
+  // Completed in semaphore: semaphoreTimeMs set (stopped by CRM)
   const completedLeads = await db.leadTracking.findMany({
     where: {
       tenantId,
       semaphoreTimeMs: { not: null },
-      fechaCreacion: { gte: twentyFourHoursAgo },
       ...stateFilter,
     },
-    include: { estado: { select: { nombre: true } } },
+    include: { estado: { select: { id: true, nombre: true } } },
     orderBy: { fechaCreacion: "desc" },
-    take: 6,
   })
 
   const mapLead = (l: typeof activeLeads[0], isActive: boolean) => ({
@@ -161,6 +172,7 @@ intel.get("/abandonment", async (c) => {
     semaphoreColor: l.semaphoreColor,
     crmStatusInicial: l.crmStatusInicial,
     estadoGestion: l.estado?.nombre ?? null,
+    crmStatusMapped: l.estado?.id ? (estadoToCrm.get(l.estado.id) ?? null) : null,
   })
 
   const leads = [

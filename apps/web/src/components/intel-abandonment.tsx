@@ -19,6 +19,7 @@ interface Lead {
   semaphoreColor: string | null
   crmStatusInicial: string | null
   estadoGestion: string | null
+  crmStatusMapped: string | null
 }
 
 interface Thresholds {
@@ -41,7 +42,7 @@ function getStatus(
     return { label: "Critico", color: "text-alert", bg: "bg-alert", border: "border-alert/20" }
   if (ms > verdeMs)
     return { label: "En riesgo", color: "text-warning", bg: "bg-warning", border: "border-warning/20" }
-  return { label: "OK", color: "text-rescue", bg: "bg-rescue", border: "border-rescue/20" }
+  return { label: "A tiempo", color: "text-rescue", bg: "bg-rescue", border: "border-rescue/20" }
 }
 
 function formatTime(ms: number): string {
@@ -212,7 +213,7 @@ export function IntelAbandonment() {
                     <div className="flex flex-col">
                       <span className="text-foreground text-xs font-medium">{lead.name}</span>
                       <Badge variant="outline" className={`mt-0.5 w-fit text-[10px] ${ESTADO_COLORS[lead.estadoGestion ?? ""] ?? "border-border/40 text-muted-foreground"}`}>
-                        {lead.estadoGestion ?? "Sin estado"}
+                        {lead.crmStatusMapped ?? lead.estadoGestion ?? "Sin estado"}
                       </Badge>
                     </div>
                     <span className="text-muted-foreground text-xs">{lead.source}</span>
