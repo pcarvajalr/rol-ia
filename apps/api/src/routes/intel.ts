@@ -119,15 +119,15 @@ intel.get("/abandonment", async (c) => {
   const tiempoVerdeMins = (guardian?.tiempoVerdeMins as number) || 5
   const tiempoAmarilloMins = (guardian?.tiempoAmarilloMins as number) || 5
 
-  // Exclude terminal states from semaphore
-  const excludedStates = await db.catEstadoGestion.findMany({
-    where: { nombre: { in: ["Cerrado", "Perdido", "Eliminado"] } },
+  // Only show leads in active states (Frío, En proceso)
+  const allowedStates = await db.catEstadoGestion.findMany({
+    where: { nombre: { in: ["Frío", "En proceso"] } },
     select: { id: true },
   })
-  const excludedIds = excludedStates.map((e) => e.id)
+  const allowedIds = allowedStates.map((e) => e.id)
 
-  const stateFilter = excludedIds.length > 0
-    ? { OR: [{ idEstado: null }, { idEstado: { notIn: excludedIds } }] }
+  const stateFilter = allowedIds.length > 0
+    ? { idEstado: { in: allowedIds } }
     : {}
 
   // Load CRM state mappings for this tenant (to show CRM label instead of internal name)
